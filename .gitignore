@@ -167,3 +167,14 @@ ignore.conf
 # Solution files (auto-generated)
 *.sln
 *.slnx
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Rider
+.idea/
+
+# Crash dumps
+*.dmp
