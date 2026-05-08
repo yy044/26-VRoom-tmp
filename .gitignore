@@ -154,3 +154,16 @@ ExportedObj/
 # Plastic SCM
 ignore.conf
 *.private.0
+
+# Plastic SCM
+.plastic/
+ignore.conf
+
+# IDE
+.vscode/
+.vs/
+.idea/
+
+# Solution files (auto-generated)
+*.sln
+*.slnx
