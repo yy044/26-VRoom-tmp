@@ -67,7 +67,7 @@ public class HeadTracker : MonoBehaviour
 
         headLabel.gameObject.SetActive(true);
 
-        if (headLabelText != null)
-            headLabelText.text = labelText;
+        //if (headLabelText != null)
+        //headLabelText.text = labelText;
     }
 }
