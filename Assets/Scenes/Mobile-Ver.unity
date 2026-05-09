@@ -503,6 +503,7 @@ GameObject:
   - component: {fileID: 937679130}
   - component: {fileID: 937679132}
   - component: {fileID: 937679131}
+  - component: {fileID: 937679133}
   m_Layer: 0
   m_Name: AppManager
   m_TagString: Untagged
@@ -561,6 +562,19 @@ MonoBehaviour:
   screen: {fileID: 1056347261}
   runningMode: 0
   _detectionResultAnnotationController: {fileID: 0}
+--- !u!114 &937679133
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 937679129}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3895e14e0208ea54693963b4347ec8fe, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SpeechToTextManager
+  headLabelText: {fileID: 614402868}
 --- !u!1 &1056347257
 GameObject:
   m_ObjectHideFlags: 0
@@ -646,7 +660,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 827c4431af677e057aa6f14170d0785c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Mediapipe.Unity.Screen
-  _screen: {fileID: 0}
+  _screen: {fileID: 1056347259}
 --- !u!1 &1783144892
 GameObject:
   m_ObjectHideFlags: 0

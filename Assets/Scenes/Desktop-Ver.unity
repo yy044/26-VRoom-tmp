@@ -119,37 +119,6 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
---- !u!1 &430874373
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 430874374}
-  m_Layer: 0
-  m_Name: EventManager
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &430874374
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 430874373}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 110.9999, y: 0.00002, z: -510.00006}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &614402865
 GameObject:
   m_ObjectHideFlags: 0
@@ -542,7 +511,7 @@ MonoBehaviour:
   displayRect: {fileID: 1056347258}
   headLabel: {fileID: 614402866}
   headLabelText: {fileID: 614402868}
-  labelText: Hello!
+  labelText: Loading...
   yOffset: 40
   mirrorX: 0
   smoothing: 15
@@ -575,6 +544,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SpeechToTextManager
   headLabelText: {fileID: 614402868}
+  visibleSeconds: 3
+  fadeSeconds: 1
+  maxCharacters: 90
 --- !u!1 &1056347257
 GameObject:
   m_ObjectHideFlags: 0
@@ -772,4 +744,3 @@ SceneRoots:
   - {fileID: 1783144896}
   - {fileID: 937679130}
   - {fileID: 839772348}
-  - {fileID: 430874374}

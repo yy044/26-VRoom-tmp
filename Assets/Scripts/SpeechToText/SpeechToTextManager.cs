@@ -1,6 +1,5 @@
 using TMPro;
 using UnityEngine;
-using UnityEngine.Windows.Speech;
 
 public class SpeechToTextManager : MonoBehaviour
 {
@@ -11,7 +10,8 @@ public class SpeechToTextManager : MonoBehaviour
     public float fadeSeconds = 1f;
     public int maxCharacters = 90;
 
-    private DictationRecognizer dictationRecognizer;
+    private ISpeechToTextProvider provider;
+
     private float lastTextTime;
     private Color originalColor;
 
@@ -20,25 +20,12 @@ public class SpeechToTextManager : MonoBehaviour
         if (headLabelText != null)
             originalColor = headLabelText.color;
 
-        dictationRecognizer = new DictationRecognizer();
+        provider = new WindowsDictationProvider();
 
-        dictationRecognizer.DictationHypothesis += (text) =>
-        {
-            SetSubtitle(text);
-        };
+        provider.OnPartialText += HandlePartialText;
+        provider.OnFinalText += HandleFinalText;
 
-        dictationRecognizer.DictationResult += (text, confidence) =>
-        {
-            Debug.Log($"STT Final: {text}");
-            SetSubtitle(text);
-        };
-
-        dictationRecognizer.DictationError += (error, hresult) =>
-        {
-            Debug.LogError($"Dictation error: {error}");
-        };
-
-        dictationRecognizer.Start();
+        provider.StartListening();
     }
 
     void Update()
@@ -63,7 +50,18 @@ public class SpeechToTextManager : MonoBehaviour
         }
     }
 
-    void SetSubtitle(string text)
+    private void HandlePartialText(string text)
+    {
+        SetSubtitle(text);
+    }
+
+    private void HandleFinalText(string text)
+    {
+        Debug.Log($"STT Final: {text}");
+        SetSubtitle(text);
+    }
+
+    private void SetSubtitle(string text)
     {
         if (headLabelText == null)
             return;
@@ -72,11 +70,12 @@ public class SpeechToTextManager : MonoBehaviour
             text = text.Substring(text.Length - maxCharacters);
 
         headLabelText.text = text;
+
         lastTextTime = Time.time;
         SetAlpha(1f);
     }
 
-    void SetAlpha(float alpha)
+    private void SetAlpha(float alpha)
     {
         Color c = originalColor;
         c.a = alpha;
@@ -85,12 +84,9 @@ public class SpeechToTextManager : MonoBehaviour
 
     void OnDestroy()
     {
-        if (dictationRecognizer != null)
+        if (provider != null)
         {
-            if (dictationRecognizer.Status == SpeechSystemStatus.Running)
-                dictationRecognizer.Stop();
-
-            dictationRecognizer.Dispose();
+            provider.StopListening();
         }
     }
 }
