@@ -6,7 +6,7 @@ using FaceDetectionResult = Mediapipe.Tasks.Components.Containers.DetectionResul
 public class HeadTracker : MonoBehaviour
 {
     [Header("References")]
-    public FaceDetectorRunner2 runner;
+    public FaceTrackingRunner runner;
     public RectTransform displayRect;
     public RectTransform headLabel;
     public TextMeshProUGUI headLabelText;

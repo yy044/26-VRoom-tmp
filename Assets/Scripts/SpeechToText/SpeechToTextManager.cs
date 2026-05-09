@@ -17,10 +17,17 @@ public class SpeechToTextManager : MonoBehaviour
 
     void Start()
     {
-        if (headLabelText != null)
-            originalColor = headLabelText.color;
+        #if UNITY_ANDROID && !UNITY_EDITOR
+            provider = new AndroidSpeechProvider();
+        #elif UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
+            provider = new WindowsDictationProvider();
+        #else
+            Debug.LogWarning("No speech provider available for this platform.");
+            return;
+        #endif
 
-        provider = new WindowsDictationProvider();
+        if (provider == null)
+            return;
 
         provider.OnPartialText += HandlePartialText;
         provider.OnFinalText += HandleFinalText;

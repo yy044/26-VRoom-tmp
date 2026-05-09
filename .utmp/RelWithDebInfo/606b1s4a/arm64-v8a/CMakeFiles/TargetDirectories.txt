@@ -1,0 +1,8 @@
+C:/Users/minch/Github/26-VRoom/.utmp/RelWithDebInfo/606b1s4a/arm64-v8a/CMakeFiles/edit_cache.dir
+C:/Users/minch/Github/26-VRoom/.utmp/RelWithDebInfo/606b1s4a/arm64-v8a/CMakeFiles/rebuild_cache.dir
+C:/Users/minch/Github/26-VRoom/.utmp/RelWithDebInfo/606b1s4a/arm64-v8a/GameActivity/CMakeFiles/game.dir
+C:/Users/minch/Github/26-VRoom/.utmp/RelWithDebInfo/606b1s4a/arm64-v8a/GameActivity/CMakeFiles/edit_cache.dir
+C:/Users/minch/Github/26-VRoom/.utmp/RelWithDebInfo/606b1s4a/arm64-v8a/GameActivity/CMakeFiles/rebuild_cache.dir
+C:/Users/minch/Github/26-VRoom/.utmp/RelWithDebInfo/606b1s4a/arm64-v8a/FramePacing/CMakeFiles/swappywrapper.dir
+C:/Users/minch/Github/26-VRoom/.utmp/RelWithDebInfo/606b1s4a/arm64-v8a/FramePacing/CMakeFiles/edit_cache.dir
+C:/Users/minch/Github/26-VRoom/.utmp/RelWithDebInfo/606b1s4a/arm64-v8a/FramePacing/CMakeFiles/rebuild_cache.dir

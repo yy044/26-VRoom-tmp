@@ -470,7 +470,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 937679130}
-  - component: {fileID: 937679132}
+  - component: {fileID: 937679134}
   - component: {fileID: 937679131}
   - component: {fileID: 937679133}
   m_Layer: 0
@@ -507,7 +507,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 48d67b77f4882784f96fde4efd929ecc, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HeadTracker
-  runner: {fileID: 937679132}
+  runner: {fileID: 0}
   displayRect: {fileID: 1056347258}
   headLabel: {fileID: 614402866}
   headLabelText: {fileID: 614402868}
@@ -515,22 +515,6 @@ MonoBehaviour:
   yOffset: 40
   mirrorX: 0
   smoothing: 15
---- !u!114 &937679132
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 937679129}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 7c5447d3ea6df3e44bce44c379895d78, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Mediapipe.Unity.Sample.FaceDetection.FaceDetectorRunner2
-  _bootstrapPrefab: {fileID: 968918444066301895, guid: 1146a9de09159a948b683e94fb3d3c95, type: 3}
-  screen: {fileID: 1056347261}
-  runningMode: 0
-  _detectionResultAnnotationController: {fileID: 0}
 --- !u!114 &937679133
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -547,6 +531,22 @@ MonoBehaviour:
   visibleSeconds: 3
   fadeSeconds: 1
   maxCharacters: 90
+--- !u!114 &937679134
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 937679129}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7c5447d3ea6df3e44bce44c379895d78, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Mediapipe.Unity.Sample.FaceDetection.FaceDetectorRunner2
+  _bootstrapPrefab: {fileID: 968918444066301895, guid: 1146a9de09159a948b683e94fb3d3c95, type: 3}
+  screen: {fileID: 1056347261}
+  runningMode: 0
+  _detectionResultAnnotationController: {fileID: 0}
 --- !u!1 &1056347257
 GameObject:
   m_ObjectHideFlags: 0
@@ -560,7 +560,7 @@ GameObject:
   - component: {fileID: 1056347259}
   - component: {fileID: 1056347261}
   m_Layer: 5
-  m_Name: WebCamDisplay
+  m_Name: CamDisplay
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

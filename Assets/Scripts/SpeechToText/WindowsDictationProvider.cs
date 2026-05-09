@@ -1,3 +1,5 @@
+#if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
+
 using System;
 using UnityEngine;
 using UnityEngine.Windows.Speech;
@@ -63,12 +65,7 @@ public class WindowsDictationProvider : ISpeechToTextProvider
     private void HandleComplete(DictationCompletionCause cause)
     {
         Debug.Log($"Dictation completed: {cause}");
-
-        // Optional auto-restart
-        if (recognizer != null &&
-            cause != DictationCompletionCause.Complete)
-        {
-            recognizer.Start();
-        }
     }
 }
+
+#endif
