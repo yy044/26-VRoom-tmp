@@ -1,0 +1,4 @@
+-r requirements_server.txt
+websockets==14.1
+sounddevice==0.5.1
+requests==2.32.3

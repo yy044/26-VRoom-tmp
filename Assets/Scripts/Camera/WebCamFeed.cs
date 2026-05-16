@@ -1,7 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
 
-public class WebcamFeed : MonoBehaviour
+public class WebCamFeed : MonoBehaviour
 {
     public RawImage display;
     public WebCamTexture webcamTexture;

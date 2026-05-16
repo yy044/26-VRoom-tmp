@@ -4,7 +4,7 @@ using TMPro;
 
 public class HeadTrackerTest : MonoBehaviour
 {
-    public WebcamFeed webcamFeed;
+    public WebCamFeed webcamFeed;
     public RectTransform headLabel;
     public TextMeshProUGUI headLabelText;
     public Canvas canvas;

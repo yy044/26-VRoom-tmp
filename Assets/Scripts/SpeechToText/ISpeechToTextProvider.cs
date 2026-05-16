@@ -8,3 +8,8 @@ public interface ISpeechToTextProvider
     void StartListening();
     void StopListening();
 }
+
+public interface ISpeechToTextTickProvider
+{
+    void Tick();
+}

@@ -763,7 +763,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 0f9c288e5ffdaf642aa89d26d9290652, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::WebcamFeed
+  m_EditorClassIdentifier: Assembly-CSharp::WebCamFeed
   display: {fileID: 2320991}
   webcamTexture: {fileID: 0}
 --- !u!4 &2105263290

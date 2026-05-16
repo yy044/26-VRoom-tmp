@@ -60,6 +60,16 @@
 *.unitypackage
 
 # =========================
+# Local STT Server
+# =========================
+
+/stt-server/.env
+/stt-server/.venv/
+/stt-server/venv/
+/stt-server/__pycache__/
+/stt-server/**/*.pyc
+
+# =========================
 # Crash / Logs
 # =========================
 
