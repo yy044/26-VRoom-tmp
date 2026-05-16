@@ -13,6 +13,7 @@ public class SpeechToTextManager : MonoBehaviour
     }
 
     public TextMeshProUGUI headLabelText;
+    public SttStreamReceiver sttStreamReceiver;
 
     [Header("Provider")]
     public SpeechProviderType providerType = SpeechProviderType.PlatformDefault;
@@ -56,6 +57,9 @@ public class SpeechToTextManager : MonoBehaviour
     {
         tickProvider?.Tick();
         FlushPendingTextEvents();
+
+        if (sttStreamReceiver != null)
+            return;
 
         if (headLabelText == null)
             return;
@@ -127,13 +131,38 @@ public class SpeechToTextManager : MonoBehaviour
 
     private void HandlePartialText(string text)
     {
-        SetSubtitle(text);
+        //SetSubtitle(text);
     }
 
     private void HandleFinalText(string text)
     {
         Debug.Log($"STT Final: {text}");
-        SetSubtitle(text);
+
+        if (sttStreamReceiver != null)
+        {
+            SendFinalTextToReceiver(text);
+            return;
+        }
+
+        //SetSubtitle(text);
+    }
+
+    private void SendFinalTextToReceiver(string text)
+    {
+        if (sttStreamReceiver == null || string.IsNullOrWhiteSpace(text))
+            return;
+
+        string[] words = text.Split(
+            new char[] { ' ', '\t', '\n', '\r' },
+            System.StringSplitOptions.RemoveEmptyEntries
+        );
+
+        foreach (string word in words)
+        {
+            sttStreamReceiver.OnTokenReceived(word.Trim());
+        }
+
+        sttStreamReceiver.OnTokenReceived("\n");
     }
 
     private void SetSubtitle(string text)
