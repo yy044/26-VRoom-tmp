@@ -1,8 +1,8 @@
 using System.Collections;
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
-using TMPro;
 
 #if UNITY_ANDROID
 using UnityEngine.Android;
@@ -16,142 +16,246 @@ public class MobileCamFeed : MonoBehaviour
     [Header("Camera Switch Button")]
     public Button nextRearCameraButton;
     public TMP_Text nextRearCameraButtonText;
+    public TMP_Text statusText;
 
     [Header("Settings")]
+    public bool startOnEnable = true;
+    public bool preferRearCamera = true;
+    public bool allowFrontCameraFallback = true;
     public bool mirrorX = false;
     public int requestedWidth = 1920;
     public int requestedHeight = 1080;
     public int requestedFPS = 30;
 
+    private readonly List<WebCamDevice> cameraDevices = new List<WebCamDevice>();
     private WebCamTexture webcamTexture;
     private RectTransform displayRect;
     private RectTransform parentRect;
+    private int currentCameraIndex;
+    private bool isStarting;
 
-    private List<WebCamDevice> rearCameras = new List<WebCamDevice>();
-    private int currentRearIndex = 0;
-    private string currentCameraName = "";
+    public Texture CurrentTexture => webcamTexture;
+    public string CurrentCameraName { get; private set; } = "";
+    public int Width => webcamTexture != null ? webcamTexture.width : 0;
+    public int Height => webcamTexture != null ? webcamTexture.height : 0;
+    public bool IsReady => webcamTexture != null && webcamTexture.isPlaying && webcamTexture.width > 16;
 
-    IEnumerator Start()
+    private void Awake()
     {
-        displayRect = display.GetComponent<RectTransform>();
-        parentRect = displayRect.parent.GetComponent<RectTransform>();
+        AutoBind();
+    }
+
+    private void OnEnable()
+    {
+        if (nextRearCameraButton != null)
+            nextRearCameraButton.onClick.AddListener(NextRearCamera);
+
+        if (startOnEnable)
+            StartCoroutine(StartFeed());
+    }
+
+    private void OnDisable()
+    {
+        if (nextRearCameraButton != null)
+            nextRearCameraButton.onClick.RemoveListener(NextRearCamera);
+    }
+
+    private IEnumerator StartFeed()
+    {
+        if (isStarting || webcamTexture != null)
+            yield break;
+
+        isStarting = true;
+        AutoBind();
+
+        if (display == null)
+        {
+            SetStatus("Camera preview RawImage is not assigned.");
+            isStarting = false;
+            yield break;
+        }
 
 #if UNITY_ANDROID && !UNITY_EDITOR
         if (!Permission.HasUserAuthorizedPermission(Permission.Camera))
         {
+            SetStatus("Waiting for camera permission...");
             Permission.RequestUserPermission(Permission.Camera);
-            yield return new WaitForSeconds(1f);
+
+            float timeout = Time.realtimeSinceStartup + 5f;
+            while (!Permission.HasUserAuthorizedPermission(Permission.Camera) && Time.realtimeSinceStartup < timeout)
+                yield return null;
+        }
+
+        if (!Permission.HasUserAuthorizedPermission(Permission.Camera))
+        {
+            SetStatus("Camera permission denied.");
+            isStarting = false;
+            yield break;
         }
 #endif
 
-        FindRearCameras();
+        RefreshCameraList();
 
-        if (rearCameras.Count == 0)
+        if (cameraDevices.Count == 0)
         {
-            SetButtonText("No rear camera");
+            SetStatus("No usable camera devices found.");
+            SetButtonText("No camera");
+            isStarting = false;
             yield break;
         }
 
-        if (nextRearCameraButton != null)
-            nextRearCameraButton.onClick.AddListener(NextRearCamera);
-
-        StartCamera(rearCameras[currentRearIndex].name);
+        currentCameraIndex = Mathf.Clamp(currentCameraIndex, 0, cameraDevices.Count - 1);
+        StartCamera(cameraDevices[currentCameraIndex].name);
+        isStarting = false;
     }
 
-    void Update()
+    private void Update()
     {
-        if (webcamTexture == null || !webcamTexture.isPlaying)
+        if (!IsReady)
             return;
 
         UpdateCameraTransform();
     }
 
-    void FindRearCameras()
+    public void NextRearCamera()
     {
-        rearCameras.Clear();
+        if (display == null)
+        {
+            ARCameraConfigSwitcher configSwitcher = FindFirstObjectByType<ARCameraConfigSwitcher>(FindObjectsInactive.Include);
+            if (configSwitcher != null)
+            {
+                configSwitcher.NextCameraConfig();
+                return;
+            }
+        }
+
+        if (cameraDevices.Count == 0)
+            RefreshCameraList();
+
+        if (cameraDevices.Count == 0)
+        {
+            SetStatus("No usable camera devices found.");
+            SetButtonText("No camera");
+            return;
+        }
+
+        currentCameraIndex = (currentCameraIndex + 1) % cameraDevices.Count;
+        StartCamera(cameraDevices[currentCameraIndex].name);
+    }
+
+    public void StopCamera()
+    {
+        if (webcamTexture == null)
+            return;
+
+        if (webcamTexture.isPlaying)
+            webcamTexture.Stop();
+
+        Destroy(webcamTexture);
+        webcamTexture = null;
+        CurrentCameraName = "";
+    }
+
+    private void RefreshCameraList()
+    {
+        cameraDevices.Clear();
 
         WebCamDevice[] devices = WebCamTexture.devices;
 
+        if (devices == null || devices.Length == 0)
+            return;
+
         for (int i = 0; i < devices.Length; i++)
         {
-            if (!devices[i].isFrontFacing)
+            bool isPreferred = preferRearCamera ? !devices[i].isFrontFacing : devices[i].isFrontFacing;
+            if (isPreferred)
+                cameraDevices.Add(devices[i]);
+        }
+
+        if (cameraDevices.Count == 0 && allowFrontCameraFallback)
+            cameraDevices.AddRange(devices);
+    }
+
+    private void StartCamera(string cameraName)
+    {
+        StopCamera();
+
+        CurrentCameraName = cameraName;
+        webcamTexture = new WebCamTexture(cameraName, requestedWidth, requestedHeight, requestedFPS);
+        display.texture = webcamTexture;
+        webcamTexture.Play();
+
+        SetButtonText($"Cam {currentCameraIndex + 1}: {ShortName(cameraName)}");
+        SetStatus($"Started camera: {cameraName}");
+    }
+
+    private void AutoBind()
+    {
+        if (display == null)
+        {
+            RawImage[] rawImages = FindObjectsByType<RawImage>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            foreach (RawImage rawImage in rawImages)
             {
-                rearCameras.Add(devices[i]);
-                Debug.Log($"Rear camera added: {devices[i].name}");
+                if (rawImage.name.Contains("Preview") || rawImage.name.Contains("Camera"))
+                {
+                    display = rawImage;
+                    break;
+                }
+            }
+
+            if (display == null && rawImages.Length > 0)
+                display = rawImages[0];
+        }
+
+        if (display != null)
+        {
+            displayRect = display.rectTransform;
+            parentRect = displayRect.parent as RectTransform;
+        }
+
+        if (statusText == null)
+        {
+            TMP_Text[] texts = FindObjectsByType<TMP_Text>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            foreach (TMP_Text text in texts)
+            {
+                if (text.name.Contains("Debug") || text.name.Contains("Status"))
+                {
+                    statusText = text;
+                    break;
+                }
             }
         }
     }
 
-    public void NextRearCamera()
-    {
-        if (rearCameras.Count == 0)
-        {
-            SetButtonText("No rear camera");
-            return;
-        }
-
-        currentRearIndex++;
-
-        if (currentRearIndex >= rearCameras.Count)
-            currentRearIndex = 0;
-
-        StartCamera(rearCameras[currentRearIndex].name);
-    }
-
-    void StartCamera(string cameraName)
-    {
-        StopCamera();
-
-        currentCameraName = cameraName;
-
-        webcamTexture = new WebCamTexture(
-            cameraName,
-            requestedWidth,
-            requestedHeight,
-            requestedFPS
-        );
-
-        display.texture = webcamTexture;
-        webcamTexture.Play();
-
-        SetButtonText($"Cam {currentRearIndex}: {ShortName(cameraName)}");
-        Debug.Log($"Started rear camera [{currentRearIndex}]: {cameraName}");
-    }
-
-    void StopCamera()
-    {
-        if (webcamTexture != null)
-        {
-            if (webcamTexture.isPlaying)
-                webcamTexture.Stop();
-
-            Destroy(webcamTexture);
-            webcamTexture = null;
-        }
-    }
-
-    string ShortName(string name)
+    private static string ShortName(string name)
     {
         if (string.IsNullOrEmpty(name))
             return "Unknown";
 
-        if (name.Length <= 22)
-            return name;
-
-        return name.Substring(0, 22) + "...";
+        return name.Length <= 22 ? name : name.Substring(0, 22) + "...";
     }
 
-    void SetButtonText(string text)
+    private void SetButtonText(string text)
     {
         if (nextRearCameraButtonText != null)
             nextRearCameraButtonText.text = text;
     }
 
-    void UpdateCameraTransform()
+    private void SetStatus(string text)
     {
+        Debug.Log(text);
+
+        if (statusText != null)
+            statusText.text = text;
+    }
+
+    private void UpdateCameraTransform()
+    {
+        if (displayRect == null)
+            return;
+
         int rotation = webcamTexture.videoRotationAngle;
         bool rotated = rotation == 90 || rotation == 270;
-
         displayRect.localEulerAngles = new Vector3(0f, 0f, -rotation);
 
         float camW = webcamTexture.width;
@@ -164,10 +268,10 @@ public class MobileCamFeed : MonoBehaviour
             camH = temp;
         }
 
-        float screenW = parentRect.rect.width;
-        float screenH = parentRect.rect.height;
-
-        float camAspect = camW / camH;
+        Rect rect = parentRect != null ? parentRect.rect : displayRect.rect;
+        float screenW = Mathf.Max(1f, rect.width);
+        float screenH = Mathf.Max(1f, rect.height);
+        float camAspect = Mathf.Max(1f, camW) / Mathf.Max(1f, camH);
         float screenAspect = screenW / screenH;
 
         float width;
@@ -189,11 +293,10 @@ public class MobileCamFeed : MonoBehaviour
 
         float xScale = mirrorX ? -1f : 1f;
         float yScale = webcamTexture.videoVerticallyMirrored ? -1f : 1f;
-
         displayRect.localScale = new Vector3(xScale, yScale, 1f);
     }
 
-    void OnDestroy()
+    private void OnDestroy()
     {
         StopCamera();
     }

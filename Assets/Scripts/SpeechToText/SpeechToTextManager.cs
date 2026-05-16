@@ -1,6 +1,6 @@
+using System.Collections.Concurrent;
 using TMPro;
 using UnityEngine;
-using System.Collections.Concurrent;
 
 public class SpeechToTextManager : MonoBehaviour
 {
@@ -8,13 +8,14 @@ public class SpeechToTextManager : MonoBehaviour
     {
         WindowsNative,
         WhisperServer,
-        PlatformDefault
+        PlatformDefault,
+        Disabled
     }
 
     public TextMeshProUGUI headLabelText;
 
     [Header("Provider")]
-    public SpeechProviderType providerType = SpeechProviderType.WindowsNative;
+    public SpeechProviderType providerType = SpeechProviderType.PlatformDefault;
     public string whisperServerUrl = "ws://127.0.0.1:8000/ws/stt";
 
     [Header("Subtitle Display")]
@@ -22,15 +23,21 @@ public class SpeechToTextManager : MonoBehaviour
     public float fadeSeconds = 1f;
     public int maxCharacters = 90;
 
+    private readonly ConcurrentQueue<SpeechTextEvent> pendingTextEvents = new ConcurrentQueue<SpeechTextEvent>();
     private ISpeechToTextProvider provider;
     private ISpeechToTextTickProvider tickProvider;
-    private readonly ConcurrentQueue<SpeechTextEvent> pendingTextEvents = new ConcurrentQueue<SpeechTextEvent>();
+    private float lastTextTime = -999f;
+    private Color originalColor = Color.white;
 
-    private float lastTextTime;
-    private Color originalColor;
-
-    void Start()
+    private void Awake()
     {
+        AutoBind();
+    }
+
+    private void Start()
+    {
+        AutoBind();
+
         if (headLabelText != null)
             originalColor = headLabelText.color;
 
@@ -42,11 +49,10 @@ public class SpeechToTextManager : MonoBehaviour
         tickProvider = provider as ISpeechToTextTickProvider;
         provider.OnPartialText += QueuePartialText;
         provider.OnFinalText += QueueFinalText;
-
         provider.StartListening();
     }
 
-    void Update()
+    private void Update()
     {
         tickProvider?.Tick();
         FlushPendingTextEvents();
@@ -57,29 +63,25 @@ public class SpeechToTextManager : MonoBehaviour
         float age = Time.time - lastTextTime;
 
         if (age <= visibleSeconds)
-        {
             SetAlpha(1f);
-        }
         else if (age <= visibleSeconds + fadeSeconds)
-        {
-            float t = (age - visibleSeconds) / fadeSeconds;
-            SetAlpha(1f - t);
-        }
+            SetAlpha(1f - ((age - visibleSeconds) / Mathf.Max(0.01f, fadeSeconds)));
         else
-        {
             SetAlpha(0f);
-        }
     }
 
     private ISpeechToTextProvider CreateProvider()
     {
         switch (providerType)
         {
+            case SpeechProviderType.Disabled:
+                return null;
+
             case SpeechProviderType.WindowsNative:
 #if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
                 return new WindowsDictationProvider();
 #else
-                Debug.LogWarning("Windows native STT is only available on Windows desktop/editor.");
+                Debug.LogWarning("Windows native speech-to-text is only available on Windows desktop/editor.");
                 return null;
 #endif
 
@@ -92,7 +94,7 @@ public class SpeechToTextManager : MonoBehaviour
 #elif UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
                 return new WindowsDictationProvider();
 #else
-                Debug.LogWarning("No default speech provider available for this platform.");
+                Debug.LogWarning("No default speech-to-text provider is available for this platform.");
                 return null;
 #endif
 
@@ -114,7 +116,7 @@ public class SpeechToTextManager : MonoBehaviour
 
     private void FlushPendingTextEvents()
     {
-        while (pendingTextEvents.TryDequeue(out var textEvent))
+        while (pendingTextEvents.TryDequeue(out SpeechTextEvent textEvent))
         {
             if (textEvent.IsFinal)
                 HandleFinalText(textEvent.Text);
@@ -136,33 +138,65 @@ public class SpeechToTextManager : MonoBehaviour
 
     private void SetSubtitle(string text)
     {
-        if (headLabelText == null)
+        if (headLabelText == null || string.IsNullOrEmpty(text))
             return;
 
         if (text.Length > maxCharacters)
             text = text.Substring(text.Length - maxCharacters);
 
         headLabelText.text = text;
-
         lastTextTime = Time.time;
         SetAlpha(1f);
     }
 
     private void SetAlpha(float alpha)
     {
-        Color c = originalColor;
-        c.a = alpha;
-        headLabelText.color = c;
+        if (headLabelText == null)
+            return;
+
+        Color color = originalColor;
+        color.a = Mathf.Clamp01(alpha);
+        headLabelText.color = color;
     }
 
-    void OnDestroy()
+    private void AutoBind()
     {
-        if (provider != null)
+        if (headLabelText != null)
+            return;
+
+        MobileARHeadTracker mobileHeadTracker = FindFirstObjectByType<MobileARHeadTracker>(FindObjectsInactive.Include);
+        if (mobileHeadTracker != null && mobileHeadTracker.headLabelText != null)
         {
-            provider.OnPartialText -= QueuePartialText;
-            provider.OnFinalText -= QueueFinalText;
-            provider.StopListening();
+            headLabelText = mobileHeadTracker.headLabelText;
+            return;
         }
+
+        HeadTracker headTracker = FindFirstObjectByType<HeadTracker>(FindObjectsInactive.Include);
+        if (headTracker != null && headTracker.headLabelText != null)
+        {
+            headLabelText = headTracker.headLabelText;
+            return;
+        }
+
+        TextMeshProUGUI[] texts = FindObjectsByType<TextMeshProUGUI>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        foreach (TextMeshProUGUI text in texts)
+        {
+            if (text.name.Contains("Head") || text.name.Contains("Subtitle"))
+            {
+                headLabelText = text;
+                return;
+            }
+        }
+    }
+
+    private void OnDestroy()
+    {
+        if (provider == null)
+            return;
+
+        provider.OnPartialText -= QueuePartialText;
+        provider.OnFinalText -= QueueFinalText;
+        provider.StopListening();
     }
 
     private readonly struct SpeechTextEvent

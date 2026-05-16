@@ -1,9 +1,9 @@
 using System.Collections;
+using TMPro;
 using Unity.Collections;
 using UnityEngine;
 using UnityEngine.XR.ARFoundation;
 using UnityEngine.XR.ARSubsystems;
-using TMPro;
 
 public class ARCameraConfigSwitcher : MonoBehaviour
 {
@@ -13,31 +13,64 @@ public class ARCameraConfigSwitcher : MonoBehaviour
     [Header("UI")]
     public TMP_Text statusText;
 
-    private XRCameraConfiguration[] configs;
-    private int currentIndex = 0;
+    private XRCameraConfiguration[] configs = new XRCameraConfiguration[0];
+    private int currentIndex;
 
-    IEnumerator Start()
+    private IEnumerator Start()
     {
-        while (cameraManager == null ||
-               cameraManager.subsystem == null ||
-               !cameraManager.subsystem.running)
+        AutoBind();
+
+        while (cameraManager == null || cameraManager.subsystem == null || !cameraManager.subsystem.running)
         {
             SetStatus("Waiting for AR camera...");
             yield return null;
+            AutoBind();
         }
 
         LoadConfigurations();
+        SnapIndexToCurrentConfig();
         ShowCurrentConfig();
     }
 
-    void LoadConfigurations()
+    public void NextCameraConfig()
     {
-        using (var availableConfigs = cameraManager.GetConfigurations(Allocator.Temp))
+        if (cameraManager == null)
+            AutoBind();
+
+        if (cameraManager == null)
+        {
+            SetStatus("No ARCameraManager found.");
+            return;
+        }
+
+        if (configs == null || configs.Length == 0)
+            LoadConfigurations();
+
+        if (configs == null || configs.Length == 0)
+        {
+            SetStatus("No camera configs available.");
+            return;
+        }
+
+        currentIndex = (currentIndex + 1) % configs.Length;
+        cameraManager.currentConfiguration = configs[currentIndex];
+        StartCoroutine(RefreshStatusAfterSwitch());
+    }
+
+    private void LoadConfigurations()
+    {
+        if (cameraManager == null || cameraManager.subsystem == null)
+        {
+            configs = new XRCameraConfiguration[0];
+            return;
+        }
+
+        using (NativeArray<XRCameraConfiguration> availableConfigs = cameraManager.GetConfigurations(Allocator.Temp))
         {
             if (!availableConfigs.IsCreated || availableConfigs.Length == 0)
             {
-                SetStatus("No AR camera configs found.");
                 configs = new XRCameraConfiguration[0];
+                SetStatus("No AR camera configs found.");
                 return;
             }
 
@@ -46,73 +79,88 @@ public class ARCameraConfigSwitcher : MonoBehaviour
             for (int i = 0; i < availableConfigs.Length; i++)
             {
                 configs[i] = availableConfigs[i];
-
-                int fps = configs[i].framerate.HasValue
-                    ? configs[i].framerate.Value
-                    : 0;
-
-                Debug.Log($"Config [{i}]: {configs[i].width}x{configs[i].height} @ {fps}fps");
+                Debug.Log($"AR config [{i}]: {Describe(configs[i])}");
             }
         }
     }
 
-    public void NextCameraConfig()
+    private IEnumerator RefreshStatusAfterSwitch()
     {
-        if (configs == null || configs.Length == 0)
-        {
-            SetStatus("No configs available.");
-            return;
-        }
-
-        currentIndex++;
-
-        if (currentIndex >= configs.Length)
-            currentIndex = 0;
-
-        cameraManager.currentConfiguration = configs[currentIndex];
-
-        StartCoroutine(RefreshStatusAfterSwitch());
-    }
-
-    IEnumerator RefreshStatusAfterSwitch()
-    {
-        SetStatus("Switching config...");
-        yield return new WaitForSeconds(0.5f);
+        SetStatus("Switching camera config...");
+        yield return new WaitForSeconds(0.35f);
         ShowCurrentConfig();
     }
 
-    void ShowCurrentConfig()
+    private void ShowCurrentConfig()
     {
-        if (!cameraManager.currentConfiguration.HasValue)
+        if (cameraManager == null)
         {
-            SetStatus("No current config.");
+            SetStatus("No ARCameraManager found.");
             return;
         }
 
-        var config = cameraManager.currentConfiguration.Value;
-
-        int fps = config.framerate.HasValue
-            ? config.framerate.Value
-            : 0;
-
-        string msg =
-            $"Config {currentIndex}\n" +
-            $"{config.width}x{config.height} @ {fps}fps";
-
-        if (cameraManager.TryGetIntrinsics(out XRCameraIntrinsics intrinsics))
+        if (!cameraManager.currentConfiguration.HasValue)
         {
-            msg +=
-                $"\nFocal: {intrinsics.focalLength.x:F1}, {intrinsics.focalLength.y:F1}";
+            SetStatus("No current AR camera config.");
+            return;
         }
 
-        SetStatus(msg);
+        XRCameraConfiguration config = cameraManager.currentConfiguration.Value;
+        string message = $"Config {currentIndex + 1}/{Mathf.Max(1, configs.Length)}\n{Describe(config)}";
+
+        if (cameraManager.TryGetIntrinsics(out XRCameraIntrinsics intrinsics))
+            message += $"\nFocal: {intrinsics.focalLength.x:F1}, {intrinsics.focalLength.y:F1}";
+
+        SetStatus(message);
     }
 
-    void SetStatus(string msg)
+    private void SnapIndexToCurrentConfig()
     {
-        Debug.Log(msg);
+        if (cameraManager == null || !cameraManager.currentConfiguration.HasValue || configs == null)
+            return;
+
+        XRCameraConfiguration current = cameraManager.currentConfiguration.Value;
+
+        for (int i = 0; i < configs.Length; i++)
+        {
+            if (configs[i].Equals(current))
+            {
+                currentIndex = i;
+                return;
+            }
+        }
+    }
+
+    private void AutoBind()
+    {
+        if (cameraManager == null)
+            cameraManager = FindFirstObjectByType<ARCameraManager>(FindObjectsInactive.Include);
+
+        if (statusText == null)
+        {
+            TMP_Text[] texts = FindObjectsByType<TMP_Text>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            foreach (TMP_Text text in texts)
+            {
+                if (text.name.Contains("Debug") || text.name.Contains("Status"))
+                {
+                    statusText = text;
+                    break;
+                }
+            }
+        }
+    }
+
+    private static string Describe(XRCameraConfiguration config)
+    {
+        int fps = config.framerate.HasValue ? config.framerate.Value : 0;
+        return fps > 0 ? $"{config.width}x{config.height} @ {fps}fps" : $"{config.width}x{config.height}";
+    }
+
+    private void SetStatus(string message)
+    {
+        Debug.Log(message);
 
         if (statusText != null)
-            statusText.text = msg;
+            statusText.text = message;
     }
 }
