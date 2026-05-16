@@ -1035,7 +1035,7 @@ MonoBehaviour:
   headLabelText: {fileID: 614402868}
   sttStreamReceiver: {fileID: 463198396}
   providerType: 1
-  whisperServerUrl: ws://192.168.45.184:8000/ws/stt
+  whisperServerUrl: ws://127.0.0.1:8000/ws/stt
   visibleSeconds: 3
   fadeSeconds: 1
   maxCharacters: 90
