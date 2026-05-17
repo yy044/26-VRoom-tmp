@@ -10,17 +10,17 @@ namespace VRoom.Gestures
 
         [Header("Gesture Settings")]
         [SerializeField]
-        private float noiseThreshold = 0.008f;
+        private float noiseThreshold = 0.015f;
 
         [SerializeField]
-        private float zoomSensitivity = 8f;
+        private float zoomSensitivity = 16f;
 
         [SerializeField]
         [Range(0.01f, 1f)]
-        private float smoothing = 0.12f;
+        private float smoothing = 0.9f;
 
         [SerializeField]
-        private float outputDeadZone = 0.004f;
+        private float outputDeadZone = 0.01f;
 
         private IHandTrackingProvider handTrackingProvider;
         private bool hasPreviousDistance;
