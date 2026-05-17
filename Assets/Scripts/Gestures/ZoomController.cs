@@ -27,7 +27,7 @@ namespace VRoom.Gestures
 
         [Header("Preview Zoom Settings")]
         [SerializeField]
-        private float previewZoomSpeed = 1.2f;
+        private float previewZoomSpeed = 3f;
 
         [SerializeField]
         private float minPreviewScale = 0.5f;
@@ -36,7 +36,7 @@ namespace VRoom.Gestures
         private float maxPreviewScale = 3f;
 
         [SerializeField]
-        private float maxPreviewScaleStep = 0.015f;
+        private float maxPreviewScaleStep = 0.1f;
 
         private float currentPreviewScale = 1f;
         private float currentCameraZoom = 1f;
