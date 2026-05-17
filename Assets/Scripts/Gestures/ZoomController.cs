@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.XR.ARFoundation;
 
 namespace VRoom.Gestures
 {
@@ -8,7 +9,9 @@ namespace VRoom.Gestures
         private enum ZoomTargetMode
         {
             RectTransformScale,
-            CameraFeedCrop
+            CameraFeedCrop,
+            CameraFieldOfView,
+            ARCameraBackgroundCrop
         }
 
         [Header("Input")]
@@ -25,6 +28,12 @@ namespace VRoom.Gestures
         [SerializeField]
         private RawImage targetCameraFeed;
 
+        [SerializeField]
+        private Camera targetCamera;
+
+        [SerializeField]
+        private ARCameraBackground targetArCameraBackground;
+
         [Header("Preview Zoom Settings")]
         [SerializeField]
         private float previewZoomSpeed = 3f;
@@ -38,10 +47,38 @@ namespace VRoom.Gestures
         [SerializeField]
         private float maxPreviewScaleStep = 0.1f;
 
+        [Header("Camera Zoom Settings")]
+        [SerializeField]
+        private float minFieldOfView = 30f;
+
+        [SerializeField]
+        private float maxFieldOfView = 70f;
+
+        [SerializeField]
+        private float maxFieldOfViewStep = 1.5f;
+
+        [Header("AR Background Zoom Settings")]
+        [SerializeField]
+        private float minArBackgroundZoom = 1f;
+
+        [SerializeField]
+        private float maxArBackgroundZoom = 3f;
+
+        [SerializeField]
+        private float arBackgroundZoomSpeed = 3f;
+
+        [SerializeField]
+        private float maxArBackgroundZoomStep = 0.1f;
+
         private float currentPreviewScale = 1f;
         private float currentCameraZoom = 1f;
+        private float currentFieldOfView;
+        private float currentArBackgroundZoom = 1f;
+        private Matrix4x4 latestArDisplayMatrix = Matrix4x4.identity;
+        private bool hasArDisplayMatrix;
         private Rect baseCameraUvRect;
         private bool hasBaseCameraUvRect;
+        private static readonly int UnityDisplayTransformId = Shader.PropertyToID("_UnityDisplayTransform");
 
         void Awake()
         {
@@ -57,6 +94,15 @@ namespace VRoom.Gestures
 
             if (targetCameraFeed != null)
                 CaptureBaseCameraUvRect();
+
+            if (targetCamera == null)
+                targetCamera = Camera.main;
+
+            if (targetCamera != null)
+                currentFieldOfView = targetCamera.fieldOfView;
+
+            if (targetArCameraBackground == null && targetCamera != null)
+                targetArCameraBackground = targetCamera.GetComponent<ARCameraBackground>();
 
             if (pinchZoomGesture == null)
             {
@@ -77,6 +123,38 @@ namespace VRoom.Gestures
                 Debug.LogError("Target camera feed RawImage is not assigned.", this);
                 enabled = false;
             }
+
+            if (targetMode == ZoomTargetMode.CameraFieldOfView && targetCamera == null)
+            {
+                Debug.LogError("Target camera is not assigned and MainCamera was not found.", this);
+                enabled = false;
+            }
+
+            if (targetMode == ZoomTargetMode.ARCameraBackgroundCrop && targetArCameraBackground == null)
+            {
+                Debug.LogError("Target AR camera background is not assigned and was not found on the target camera.", this);
+                enabled = false;
+            }
+        }
+
+        private void OnEnable()
+        {
+            ARCameraManager cameraManager = targetArCameraBackground != null
+                ? targetArCameraBackground.GetComponent<ARCameraManager>()
+                : null;
+
+            if (cameraManager != null)
+                cameraManager.frameReceived += OnArCameraFrameReceived;
+        }
+
+        private void OnDisable()
+        {
+            ARCameraManager cameraManager = targetArCameraBackground != null
+                ? targetArCameraBackground.GetComponent<ARCameraManager>()
+                : null;
+
+            if (cameraManager != null)
+                cameraManager.frameReceived -= OnArCameraFrameReceived;
         }
 
         void Update()
@@ -91,8 +169,18 @@ namespace VRoom.Gestures
 
             if (targetMode == ZoomTargetMode.CameraFeedCrop)
                 ApplyCameraFeedZoom(zoomDelta);
+            else if (targetMode == ZoomTargetMode.CameraFieldOfView)
+                ApplyCameraFieldOfViewZoom(zoomDelta);
+            else if (targetMode == ZoomTargetMode.ARCameraBackgroundCrop)
+                ApplyArBackgroundZoom(zoomDelta);
             else
                 ApplyPreviewZoom(zoomDelta);
+        }
+
+        private void LateUpdate()
+        {
+            if (targetMode == ZoomTargetMode.ARCameraBackgroundCrop)
+                ApplyArBackgroundDisplayTransform();
         }
 
         private void ApplyPreviewZoom(float zoomDelta)
@@ -140,6 +228,73 @@ namespace VRoom.Gestures
                 croppedWidth,
                 croppedHeight
             );
+        }
+
+        private void ApplyCameraFieldOfViewZoom(float zoomDelta)
+        {
+            float fovDelta = Mathf.Clamp(
+                zoomDelta * previewZoomSpeed,
+                -maxFieldOfViewStep,
+                maxFieldOfViewStep
+            );
+
+            currentFieldOfView = Mathf.Clamp(
+                currentFieldOfView - fovDelta,
+                minFieldOfView,
+                maxFieldOfView
+            );
+
+            targetCamera.fieldOfView = currentFieldOfView;
+        }
+
+        private void ApplyArBackgroundZoom(float zoomDelta)
+        {
+            float zoomStep = Mathf.Clamp(
+                zoomDelta * arBackgroundZoomSpeed,
+                -maxArBackgroundZoomStep,
+                maxArBackgroundZoomStep
+            );
+
+            currentArBackgroundZoom = Mathf.Clamp(
+                currentArBackgroundZoom + zoomStep,
+                minArBackgroundZoom,
+                maxArBackgroundZoom
+            );
+
+            ApplyArBackgroundDisplayTransform();
+        }
+
+        private void ApplyArBackgroundDisplayTransform()
+        {
+            if (targetArCameraBackground == null || targetArCameraBackground.material == null || !hasArDisplayMatrix)
+                return;
+
+            targetArCameraBackground.material.SetMatrix(
+                UnityDisplayTransformId,
+                latestArDisplayMatrix * BuildArBackgroundCropMatrix(currentArBackgroundZoom)
+            );
+        }
+
+        private void OnArCameraFrameReceived(ARCameraFrameEventArgs eventArgs)
+        {
+            if (!eventArgs.displayMatrix.HasValue)
+                return;
+
+            latestArDisplayMatrix = eventArgs.displayMatrix.Value;
+            hasArDisplayMatrix = true;
+        }
+
+        private static Matrix4x4 BuildArBackgroundCropMatrix(float zoom)
+        {
+            float scale = 1f / Mathf.Max(1f, zoom);
+            float offset = (1f - scale) * 0.5f;
+
+            Matrix4x4 matrix = Matrix4x4.identity;
+            matrix.m00 = scale;
+            matrix.m11 = scale;
+            matrix.m20 = offset;
+            matrix.m21 = offset;
+            return matrix;
         }
 
         private void CaptureBaseCameraUvRect()

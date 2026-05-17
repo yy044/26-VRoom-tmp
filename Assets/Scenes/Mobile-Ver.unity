@@ -617,6 +617,41 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SttStreamReceiver
   subtitleController: {fileID: 1348300142}
+--- !u!1 &544499116
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 544499117}
+  m_Layer: 0
+  m_Name: GestureManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &544499117
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 544499116}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 1293470888}
+  - {fileID: 1879057972}
+  - {fileID: 721609111}
+  - {fileID: 1462840162}
+  m_Father: {fileID: 937679130}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &604475845
 GameObject:
   m_ObjectHideFlags: 0
@@ -928,6 +963,55 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 50, y: -30, z: 0}
+--- !u!1 &721609110
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 721609111}
+  - component: {fileID: 721609112}
+  m_Layer: 0
+  m_Name: Pinch Zoom Gesture
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &721609111
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 721609110}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 544499117}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &721609112
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 721609110}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7d6925f75e2819748a869b2cacd3a720, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::VRoom.Gestures.PinchZoomGesture
+  handTrackingProviderBehaviour: {fileID: 1293470887}
+  noiseThreshold: 0.015
+  zoomSensitivity: 16
+  smoothing: 0.9
+  outputDeadZone: 0.01
 --- !u!1 &785907824
 GameObject:
   m_ObjectHideFlags: 0
@@ -976,6 +1060,7 @@ GameObject:
   - component: {fileID: 937679136}
   - component: {fileID: 937679137}
   - component: {fileID: 937679138}
+  - component: {fileID: 937679139}
   m_Layer: 0
   m_Name: AppManager
   m_TagString: Untagged
@@ -997,6 +1082,7 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 463198395}
+  - {fileID: 544499117}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &937679131
@@ -1122,6 +1208,74 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MobileSceneAutoBinder
   bindOnAwake: 1
+--- !u!114 &937679139
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 937679129}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2a5b8a6d370193849a357498fea732f2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ARCameraHandLandmarkerRunner
+  cameraManager: {fileID: 154705326}
+  handTrackingBridge: {fileID: 1879057971}
+  targetFps: 8
+  maxInputWidth: 320
+  delegateMode: 0
+  numHands: 1
+  minHandDetectionConfidence: 0.5
+  minHandPresenceConfidence: 0.5
+  minTrackingConfidence: 0.5
+--- !u!1 &1293470886
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1293470888}
+  - component: {fileID: 1293470887}
+  m_Layer: 0
+  m_Name: Real Hand Tracking Provider
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1293470887
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1293470886}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 47c749fb88c850e43b2351714cefe7e1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::VRoom.Gestures.RealHandTrackingProvider
+  isTracked: 0
+  thumbTip: {x: 0, y: 0}
+  indexTip: {x: 0, y: 0}
+--- !u!4 &1293470888
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1293470886}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 544499117}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1348300140
 GameObject:
   m_ObjectHideFlags: 0
@@ -1237,6 +1391,67 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1348300140}
   m_CullTransparentMesh: 1
+--- !u!1 &1462840161
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1462840162}
+  - component: {fileID: 1462840163}
+  m_Layer: 0
+  m_Name: Zoom Controller
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1462840162
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1462840161}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 544499117}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1462840163
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1462840161}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 155c58bbd4bbb4a4aa35b566a765878c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::VRoom.Gestures.ZoomController
+  pinchZoomGesture: {fileID: 721609112}
+  targetMode: 3
+  targetPreview: {fileID: 0}
+  targetCameraFeed: {fileID: 0}
+  targetCamera: {fileID: 154705328}
+  targetArCameraBackground: {fileID: 154705325}
+  previewZoomSpeed: 3
+  minPreviewScale: 0.5
+  maxPreviewScale: 3
+  maxPreviewScaleStep: 0.1
+  minFieldOfView: 30
+  maxFieldOfView: 70
+  maxFieldOfViewStep: 1.5
+  minArBackgroundZoom: 1
+  maxArBackgroundZoom: 3
+  arBackgroundZoomSpeed: 3
+  maxArBackgroundZoomStep: 0.1
 --- !u!1 &1528904934
 GameObject:
   m_ObjectHideFlags: 0
@@ -1711,6 +1926,53 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1808596502}
   m_CullTransparentMesh: 1
+--- !u!1 &1879057970
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1879057972}
+  - component: {fileID: 1879057971}
+  m_Layer: 0
+  m_Name: MediaPipe Hand Tracking Bridge
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1879057971
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1879057970}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2f36fda2185754944bf8defe717eecab, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::VRoom.Gestures.MediaPipeHandTrackingBridge
+  handTrackingProvider: {fileID: 1293470887}
+  flipY: 1
+  landmarkSmoothing: 0.35
+--- !u!4 &1879057972
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1879057970}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 544499117}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &2111943444
 GameObject:
   m_ObjectHideFlags: 0
