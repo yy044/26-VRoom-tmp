@@ -36,7 +36,6 @@ public class MobileCamFeed : MonoBehaviour
     private int currentCameraIndex;
     private bool isStarting;
     private string lastPreviewAuditState;
-    private bool loggedValidTextureSize;
 
     public Texture CurrentTexture => webcamTexture;
     public string CurrentCameraName { get; private set; } = "";
@@ -71,12 +70,10 @@ public class MobileCamFeed : MonoBehaviour
 
         isStarting = true;
         AutoBind();
-        LogMobileCamFeedAudit("StartFeed before camera switch");
 
         if (display == null)
         {
             SetStatus("Camera preview RawImage is not assigned.");
-            LogMobileCamFeedAudit("StartFeed missing RawImage");
             isStarting = false;
             yield break;
         }
@@ -111,19 +108,12 @@ public class MobileCamFeed : MonoBehaviour
         }
 
         currentCameraIndex = Mathf.Clamp(currentCameraIndex, 0, cameraDevices.Count - 1);
-        LogMobileCamFeedAudit("StartFeed after camera switch requested");
         StartCamera(cameraDevices[currentCameraIndex].name);
         isStarting = false;
     }
 
     private void Update()
     {
-        if (!loggedValidTextureSize && IsReady)
-        {
-            loggedValidTextureSize = true;
-            LogMobileCamFeedAudit("Update after width/height valid");
-        }
-
         if (!IsReady)
             return;
 
@@ -133,7 +123,6 @@ public class MobileCamFeed : MonoBehaviour
     public void NextRearCamera()
     {
         Debug.Log("[UIButtonTouchAudit] Camera switch OnClick -> NextRearCamera", this);
-        LogMobileCamFeedAudit("NextRearCamera before camera switch");
 
         if (display == null)
         {
@@ -152,7 +141,6 @@ public class MobileCamFeed : MonoBehaviour
         }
 
         currentCameraIndex = (currentCameraIndex + 1) % cameraDevices.Count;
-        LogMobileCamFeedAudit("NextRearCamera after camera switch requested");
         StartCamera(cameraDevices[currentCameraIndex].name);
     }
 
@@ -170,7 +158,6 @@ public class MobileCamFeed : MonoBehaviour
         arCameraManager.requestedFacingDirection = useSelfie
             ? CameraFacingDirection.User
             : CameraFacingDirection.World;
-        LogMobileCamFeedAudit($"ToggleARCameraFacing after camera switch requested useSelfie={useSelfie}");
 
         MobileARModeController modeController = FindFirstObjectByType<MobileARModeController>(FindObjectsInactive.Include);
         if (modeController != null)
@@ -224,20 +211,11 @@ public class MobileCamFeed : MonoBehaviour
 
         CurrentCameraName = cameraName;
         webcamTexture = new WebCamTexture(cameraName, requestedWidth, requestedHeight, requestedFPS);
-        loggedValidTextureSize = false;
         display.texture = webcamTexture;
         webcamTexture.Play();
-        LogMobileCamFeedAudit("StartCamera after WebCamTexture.Play");
-        StartCoroutine(LogOneFrameAfterStart());
 
         SetButtonText($"Cam {currentCameraIndex + 1}: {ShortName(cameraName)}");
         SetStatus($"Started camera: {cameraName}");
-    }
-
-    private IEnumerator LogOneFrameAfterStart()
-    {
-        yield return null;
-        LogMobileCamFeedAudit("StartCamera one frame later");
     }
 
     private void AutoBind()
@@ -365,32 +343,6 @@ public class MobileCamFeed : MonoBehaviour
 
         lastPreviewAuditState = state;
         Debug.Log($"[CameraPreviewMapping] {state}", this);
-    }
-
-    private void LogMobileCamFeedAudit(string stage)
-    {
-        bool hasSelectedDevice = currentCameraIndex >= 0 && currentCameraIndex < cameraDevices.Count;
-        WebCamDevice selectedDevice = hasSelectedDevice ? cameraDevices[currentCameraIndex] : default;
-        bool rawImageAssigned = display != null;
-        bool textureMatches = rawImageAssigned && webcamTexture != null && ReferenceEquals(display.texture, webcamTexture);
-        bool rawImageEnabled = rawImageAssigned && display.enabled;
-        bool rawImageActive = rawImageAssigned && display.gameObject.activeInHierarchy;
-
-        Debug.Log(
-            $"[MobileCamFeedAudit] stage={stage} " +
-            $"selectedDeviceName={(hasSelectedDevice ? selectedDevice.name : "none")} " +
-            $"selectedDeviceIndex={currentCameraIndex} " +
-            $"selectedDevice.isFrontFacing={(hasSelectedDevice && selectedDevice.isFrontFacing)} " +
-            $"requestedFrontOrBack={(preferRearCamera ? "Back" : "Front")} " +
-            $"webCamTextureExists={(webcamTexture != null)} " +
-            $"webCamTexture.isPlaying={(webcamTexture != null && webcamTexture.isPlaying)} " +
-            $"webCamTexture.width={(webcamTexture != null ? webcamTexture.width : 0)} " +
-            $"webCamTexture.height={(webcamTexture != null ? webcamTexture.height : 0)} " +
-            $"rawImageAssigned={rawImageAssigned} " +
-            $"rawImage.texture==webCamTexture={textureMatches} " +
-            $"rawImage.enabled={rawImageEnabled} " +
-            $"rawImage.gameObject.activeInHierarchy={rawImageActive}",
-            this);
     }
 
     private void OnDestroy()

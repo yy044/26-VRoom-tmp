@@ -2,7 +2,6 @@ using System.Collections;
 using TMPro;
 using Unity.XR.CoreUtils;
 using UnityEngine;
-using UnityEngine.UI;
 using UnityEngine.XR.ARFoundation;
 using UnityEngine.XR.ARSubsystems;
 
@@ -23,7 +22,6 @@ public class MobileARModeController : MonoBehaviour
     public bool applyStartupModeOnStart = true;
     public bool restartSessionOnModeChange = true;
     public float sessionResetDelaySeconds = 0.15f;
-    [SerializeField] private float backCameraReadyTimeoutSeconds = 3f;
     public bool fixedSubtitleFallbackWhenFaceMissing = false;
 
     [Header("References")]
@@ -37,9 +35,6 @@ public class MobileARModeController : MonoBehaviour
     public ARCameraHandLandmarkerRunner handLandmarkerRunner;
     public MobileARFaceTrackingRunner faceTrackingRunner;
     [SerializeField] private BackCameraFacePositionProvider backFacePositionProvider;
-    [SerializeField] private MobileOrientationController orientationController;
-    [SerializeField] private Canvas uiCanvas;
-    [SerializeField] private RectTransform safeAreaPanel;
     public MobileARHeadTracker headTracker;
     public SpeechToTextManager speechToTextManager;
     public TMP_Text statusText;
@@ -55,7 +50,6 @@ public class MobileARModeController : MonoBehaviour
     private string lastBackCameraFaceAuditState;
     private string lastProviderFaceUIStatus;
     private string lastBackFaceProviderSourceAudit;
-    private string lastMobileUiAuditState;
 
     public MobileTrackingMode CurrentMode => currentMode;
 
@@ -133,17 +127,8 @@ public class MobileARModeController : MonoBehaviour
         bool useBackFaceMode = mode == MobileTrackingMode.BackFace2D;
         bool useFaceMode = useFrontFaceMode || useBackFaceMode;
 
-        if (orientationController != null)
-            orientationController.ApplyForMode(useFrontFaceMode);
-
-        SetEnabled(backFacePositionProvider, false);
-
-        if (cameraManager != null)
-            cameraManager.requestedFacingDirection = useFrontFaceMode ? CameraFacingDirection.User : CameraFacingDirection.World;
-
-        LogBackCameraRouteAudit(mode, 0, "requested-facing");
-
         SetEnabled(faceManager, useFrontFaceMode);
+        SetEnabled(backFacePositionProvider, useBackFaceMode);
         SetEnabled(handLandmarkerRunner, !useFaceMode);
         SetEnabled(planeManager, !useFaceMode);
         SetEnabled(raycastManager, !useFaceMode);
@@ -158,10 +143,12 @@ public class MobileARModeController : MonoBehaviour
                 : MobileARFaceTrackingRunner.TrackingSource.Disabled;
         }
 
+        if (cameraManager != null)
+            cameraManager.requestedFacingDirection = useFrontFaceMode ? CameraFacingDirection.User : CameraFacingDirection.World;
+
         if (restartSessionOnModeChange && arSession != null)
         {
             arSession.enabled = false;
-            LogBackCameraRouteAudit(mode, 0, "session-disabled");
             float delay = Mathf.Max(0f, sessionResetDelaySeconds);
             if (delay > 0f)
                 yield return new WaitForSecondsRealtime(delay);
@@ -170,43 +157,9 @@ public class MobileARModeController : MonoBehaviour
 
             arSession.Reset();
             arSession.enabled = true;
-            LogBackCameraRouteAudit(mode, 0, "session-enabled");
-        }
-
-        if (useBackFaceMode)
-        {
-            bool backCameraReady = false;
-            float deadline = Time.realtimeSinceStartup + Mathf.Max(0.1f, backCameraReadyTimeoutSeconds);
-            int waitFrame = 0;
-
-            while (Time.realtimeSinceStartup < deadline)
-            {
-                waitFrame++;
-                if (cameraManager != null && cameraManager.currentFacingDirection == CameraFacingDirection.World)
-                {
-                    backCameraReady = true;
-                    break;
-                }
-
-                LogBackCameraRouteAudit(mode, waitFrame, "waiting");
-                yield return null;
-            }
-
-            if (backCameraReady)
-            {
-                SetEnabled(backFacePositionProvider, true);
-                LogBackCameraRouteAudit(mode, waitFrame, "ready");
-            }
-            else
-            {
-                SetEnabled(backFacePositionProvider, false);
-                LogBackCameraRouteAudit(mode, waitFrame, "timeout");
-                Debug.LogWarning("[BackCameraRouteAudit] Back camera did not become ready", this);
-            }
         }
 
         RefreshStatus();
-        LogMobileUIAudit();
         switchRoutine = null;
     }
 
@@ -273,21 +226,6 @@ public class MobileARModeController : MonoBehaviour
         if (faceTrackingRunner == null)
             faceTrackingRunner = FindFirstObjectByType<MobileARFaceTrackingRunner>(FindObjectsInactive.Include);
 
-        if (orientationController == null)
-            orientationController = GetComponent<MobileOrientationController>();
-
-        if (orientationController == null)
-            orientationController = FindFirstObjectByType<MobileOrientationController>(FindObjectsInactive.Include);
-
-        if (orientationController == null)
-            orientationController = gameObject.AddComponent<MobileOrientationController>();
-
-        if (uiCanvas == null)
-            uiCanvas = FindFirstObjectByType<Canvas>(FindObjectsInactive.Include);
-
-        if (safeAreaPanel == null)
-            safeAreaPanel = FindRectTransformByName("SafeAreaPanel");
-
         BindBackFacePositionProvider();
 
         if (statusText == null)
@@ -342,7 +280,6 @@ public class MobileARModeController : MonoBehaviour
 
         LogBackCameraFaceAudit(message);
         LogProviderFaceUIStatus(provider, message);
-        LogMobileUIAudit();
     }
 
     private static TMP_Text FindStatusText()
@@ -361,53 +298,6 @@ public class MobileARModeController : MonoBehaviour
     {
         if (behaviour != null)
             behaviour.enabled = enabled;
-    }
-
-    private void LogMobileUIAudit()
-    {
-        string requestedFacing = cameraManager != null ? cameraManager.requestedFacingDirection.ToString() : "No ARCameraManager";
-        string currentFacing = cameraManager != null ? cameraManager.currentFacingDirection.ToString() : "No ARCameraManager";
-        string appliedOrientation = orientationController != null ? orientationController.AppliedOrientation.ToString() : "NoOrientationController";
-        float canvasScaleFactor = uiCanvas != null ? uiCanvas.scaleFactor : 0f;
-        Vector2 safeAnchorMin = safeAreaPanel != null ? safeAreaPanel.anchorMin : Vector2.zero;
-        Vector2 safeAnchorMax = safeAreaPanel != null ? safeAreaPanel.anchorMax : Vector2.zero;
-        string state =
-            $"Screen.width={Screen.width} " +
-            $"Screen.height={Screen.height} " +
-            $"Screen.orientation={Screen.orientation} " +
-            $"Screen.safeArea={Screen.safeArea} " +
-            $"Canvas.scaleFactor={canvasScaleFactor:0.###} " +
-            $"CurrentMode={currentMode} " +
-            $"requestedFacingDirection={requestedFacing} " +
-            $"currentFacingDirection={currentFacing} " +
-            $"AppliedOrientation={appliedOrientation} " +
-            $"SafeAreaPanel.anchorMin={safeAnchorMin} " +
-            $"SafeAreaPanel.anchorMax={safeAnchorMax}";
-
-        if (state == lastMobileUiAuditState)
-            return;
-
-        lastMobileUiAuditState = state;
-        Debug.Log($"[MobileUIAudit] {state}", this);
-    }
-
-    private void LogBackCameraRouteAudit(MobileTrackingMode mode, int waitFrame, string state)
-    {
-        string requestedFacing = cameraManager != null ? cameraManager.requestedFacingDirection.ToString() : "No ARCameraManager";
-        string currentFacing = cameraManager != null ? cameraManager.currentFacingDirection.ToString() : "No ARCameraManager";
-        bool providerEnabled = backFacePositionProvider != null && backFacePositionProvider.enabled;
-        bool sessionEnabled = arSession != null && arSession.enabled;
-
-        Debug.Log(
-            $"[BackCameraRouteAudit] " +
-            $"mode={mode} " +
-            $"requestedFacingDirection={requestedFacing} " +
-            $"currentFacingDirection={currentFacing} " +
-            $"providerEnabled={providerEnabled} " +
-            $"arSessionEnabled={sessionEnabled} " +
-            $"waitFrame={waitFrame} " +
-            $"state={state}",
-            this);
     }
 
     private void LogBackCameraFaceAudit(string statusTextValue)
@@ -506,18 +396,6 @@ public class MobileARModeController : MonoBehaviour
             count++;
 
         return count;
-    }
-
-    private static RectTransform FindRectTransformByName(string targetName)
-    {
-        RectTransform[] rects = FindObjectsByType<RectTransform>(FindObjectsInactive.Include, FindObjectsSortMode.None);
-        foreach (RectTransform rect in rects)
-        {
-            if (rect.name == targetName)
-                return rect;
-        }
-
-        return null;
     }
 
     private void OnDestroy()
