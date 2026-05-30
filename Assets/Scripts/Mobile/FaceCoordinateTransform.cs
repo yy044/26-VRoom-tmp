@@ -1,7 +1,63 @@
 using UnityEngine;
 
+[System.Serializable]
+public struct FaceCoordinateTransformSettings
+{
+    public bool mirrorX;
+    public bool invertY;
+    public bool swapXY;
+    public bool rotate90Clockwise;
+    public bool rotate90CounterClockwise;
+
+    public FaceCoordinateTransformSettings(
+        bool mirrorX,
+        bool invertY,
+        bool swapXY,
+        bool rotate90Clockwise,
+        bool rotate90CounterClockwise)
+    {
+        this.mirrorX = mirrorX;
+        this.invertY = invertY;
+        this.swapXY = swapXY;
+        this.rotate90Clockwise = rotate90Clockwise;
+        this.rotate90CounterClockwise = rotate90CounterClockwise;
+    }
+
+    public static FaceCoordinateTransformSettings CurrentMobileDefault =>
+        new FaceCoordinateTransformSettings(
+            mirrorX: true,
+            invertY: true,
+            swapXY: false,
+            rotate90Clockwise: false,
+            rotate90CounterClockwise: false);
+
+    public static FaceCoordinateTransformSettings Back2DDefault =>
+        new FaceCoordinateTransformSettings(
+            mirrorX: false,
+            invertY: true,
+            swapXY: false,
+            rotate90Clockwise: false,
+            rotate90CounterClockwise: false);
+
+    public override string ToString()
+    {
+        return $"mirrorX:{mirrorX},invertY:{invertY},swapXY:{swapXY},rotate90Clockwise:{rotate90Clockwise},rotate90CounterClockwise:{rotate90CounterClockwise}";
+    }
+}
+
 public static class FaceCoordinateTransform
 {
+    public static Vector2 TransformPoint(Vector2 point, FaceCoordinateTransformSettings settings)
+    {
+        return TransformPoint(
+            point,
+            settings.mirrorX,
+            settings.invertY,
+            settings.swapXY,
+            settings.rotate90Clockwise,
+            settings.rotate90CounterClockwise);
+    }
+
     public static Vector2 TransformPoint(
         Vector2 point,
         bool mirrorX,
@@ -29,6 +85,17 @@ public static class FaceCoordinateTransform
             point = new Vector2(1f - point.y, point.x);
 
         return new Vector2(Mathf.Clamp01(point.x), Mathf.Clamp01(point.y));
+    }
+
+    public static Rect TransformRect(Rect rect, FaceCoordinateTransformSettings settings)
+    {
+        return TransformRect(
+            rect,
+            settings.mirrorX,
+            settings.invertY,
+            settings.swapXY,
+            settings.rotate90Clockwise,
+            settings.rotate90CounterClockwise);
     }
 
     public static Rect TransformRect(

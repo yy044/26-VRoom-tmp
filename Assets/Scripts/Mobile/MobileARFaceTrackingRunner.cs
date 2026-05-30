@@ -52,6 +52,8 @@ public class MobileARFaceTrackingRunner : MonoBehaviour, IFacePositionProvider
     public Camera trackingCamera;
     public ARFaceManager faceManager;
     public bool fallbackWhenARFaceMissing = true;
+    [Tooltip("Mirror projected ARFace mesh bounds X before publishing them. This is a provider-side correction for ARFace mesh bounds only; UI display transforms still happen in ActiveFacePositionProviderRouter.")]
+    public bool mirrorProjectedFaceBoundsX = true;
 
     [Header("Fallback Target")]
     [Range(0f, 1f)] public float fallbackX = 0.5f;
@@ -75,6 +77,7 @@ public class MobileARFaceTrackingRunner : MonoBehaviour, IFacePositionProvider
     private string lastFaceAuditState;
     private string lastSessionAuditState;
     private string lastFaceUIStatus;
+    private string lastCenterMappingAuditState;
 
     public int ImageWidth => Mathf.Max(1, Screen.width);
     public int ImageHeight => Mathf.Max(1, Screen.height);
@@ -214,18 +217,23 @@ public class MobileARFaceTrackingRunner : MonoBehaviour, IFacePositionProvider
                 return;
             }
 
-            Vector2 normalizedCenter = new Vector2(
+            Vector2 projectedRawCenter = new Vector2(
                 Mathf.Clamp01(screenPosition.x / ImageWidth),
                 Mathf.Clamp01(1f - screenPosition.y / ImageHeight)
             );
 
-            Rect normalizedBounds = TryGetProjectedFaceBounds(face, out Rect projectedBounds)
-                ? projectedBounds
-                : Rect.zero;
+            bool hasProjectedBounds = TryGetProjectedFaceBounds(face, out Rect projectedBounds);
+            Rect normalizedBounds = hasProjectedBounds ? projectedBounds : Rect.zero;
+            // Front AR has two possible center sources: ARFace transform projection and projected mesh bounds.
+            // The bounds are the visual ground truth after the provider-side mesh correction above, so use
+            // bounds.center when valid. Falling back to the raw projected transform center keeps tracking alive
+            // if the mesh vertices are unavailable. Do not mirror this center again in the provider.
+            Vector2 normalizedCenter = hasProjectedBounds ? normalizedBounds.center : projectedRawCenter;
 
             latestDetection = new MobileFaceDetection(normalizedCenter, normalizedBounds);
             hasLatestDetection = true;
             HasRealFaceTracking = true;
+            LogCenterMappingAudit(projectedRawCenter, normalizedBounds, normalizedCenter, hasProjectedBounds);
             return;
         }
 
@@ -292,7 +300,13 @@ public class MobileARFaceTrackingRunner : MonoBehaviour, IFacePositionProvider
         if (!foundVisibleVertex || maxX - minX <= 0.001f || maxY - minY <= 0.001f)
             return false;
 
-        normalizedBounds = Rect.MinMaxRect(minX, minY, maxX, maxY);
+        Rect projectedBounds = Rect.MinMaxRect(minX, minY, maxX, maxY);
+        // This correction preserves the currently verified front AR bounding-box behavior.
+        // It only changes the provider's published bounds; shared display mapping is applied later.
+        normalizedBounds = mirrorProjectedFaceBoundsX
+            ? Rect.MinMaxRect(1f - projectedBounds.xMax, projectedBounds.yMin, 1f - projectedBounds.xMin, projectedBounds.yMax)
+            : projectedBounds;
+
         return true;
     }
 
@@ -431,6 +445,38 @@ public class MobileARFaceTrackingRunner : MonoBehaviour, IFacePositionProvider
 
         lastFaceUIStatus = state;
         Debug.Log($"[FaceUIStatus] {state}", this);
+    }
+
+    private void LogCenterMappingAudit(
+        Vector2 projectedRawCenter,
+        Rect correctedBounds,
+        Vector2 finalPublishedCenter,
+        bool hasCorrectedBounds)
+    {
+        Vector2 correctedBoundsCenter = hasCorrectedBounds ? correctedBounds.center : Vector2.zero;
+        FaceCoordinateTransformSettings auditTransform = FaceCoordinateTransformSettings.CurrentMobileDefault;
+        Vector2 transformedOverlayCenter = FaceCoordinateTransform.TransformPoint(finalPublishedCenter, auditTransform);
+        Rect transformedBounds = hasCorrectedBounds
+            ? FaceCoordinateTransform.TransformRect(correctedBounds, auditTransform)
+            : Rect.zero;
+        Vector2 transformedBoundsCenter = hasCorrectedBounds ? transformedBounds.center : Vector2.zero;
+        string centerSource = hasCorrectedBounds ? "correctedBounds.center" : "projectedRawCenter";
+        string state =
+            $"centerSource={centerSource} " +
+            $"projectedRawCenter={projectedRawCenter} " +
+            $"correctedBoundsCenter={correctedBoundsCenter} " +
+            $"finalPublishedCenter={finalPublishedCenter} " +
+            $"transformedOverlayCenter={transformedOverlayCenter} " +
+            $"transformedBoundsCenter={transformedBoundsCenter} " +
+            $"hasCorrectedBounds={hasCorrectedBounds} " +
+            $"correctedBounds=min({correctedBounds.xMin:0.000},{correctedBounds.yMin:0.000}) max({correctedBounds.xMax:0.000},{correctedBounds.yMax:0.000}) " +
+            $"auditTransform={auditTransform}";
+
+        if (state == lastCenterMappingAuditState)
+            return;
+
+        lastCenterMappingAuditState = state;
+        Debug.Log($"[FrontFaceCenterMappingAudit] {state}", this);
     }
 
     private static string GetCameraPermissionStatus()

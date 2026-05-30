@@ -270,7 +270,7 @@ public class MobileARModeController : MonoBehaviour
         IFacePositionProvider provider = GetActiveFaceProvider();
         bool hasFace = provider != null && provider.HasFace;
         string detectionState = hasFace ? "DETECTED" : "NOT DETECTED";
-        string message = $"{GetStatusPrefix(provider)}: {detectionState}";
+        string message = $"{GetStatusPrefix(provider)}: {detectionState}{GetBoundsStatus(provider)}";
 
         if (statusText != null)
         {
@@ -356,6 +356,18 @@ public class MobileARModeController : MonoBehaviour
             return "FRONT AR";
 
         return provider != null ? provider.SourceName : "NO FACE PROVIDER";
+    }
+
+    private static string GetBoundsStatus(IFacePositionProvider provider)
+    {
+        if (provider == null || !provider.HasFace)
+            return "";
+
+        Rect rect = provider.NormalizedFaceRect;
+        Vector2 center = provider.NormalizedFaceCenter;
+        return
+            $"\nbox x:{rect.xMin:0.000}-{rect.xMax:0.000} y:{rect.yMin:0.000}-{rect.yMax:0.000}" +
+            $"\ncenter x:{center.x:0.000} y:{center.y:0.000}";
     }
 
     private void LogProviderFaceUIStatus(IFacePositionProvider provider, string statusTextValue)

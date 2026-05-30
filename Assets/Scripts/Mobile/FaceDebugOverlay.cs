@@ -35,22 +35,6 @@ public class FaceDebugOverlay : MonoBehaviour
     [Tooltip("Match FaceAnchoredSubtitleTarget.fallbackCenterOffsetNormalized.")]
     [SerializeField] private Vector2 fallbackCenterOffsetNormalized = new Vector2(0f, 0.12f);
 
-    [Header("Coordinate Mapping")]
-    [Tooltip("Mirror the provider's normalized X coordinate before mapping to UI.")]
-    [SerializeField] private bool mirrorX = true;
-
-    [Tooltip("Invert the provider's normalized Y coordinate before mapping to UI.")]
-    [SerializeField] private bool invertY = true;
-
-    [Tooltip("Swap normalized X/Y before optional 90 degree rotations.")]
-    [SerializeField] private bool swapXY = false;
-
-    [Tooltip("Rotate normalized coordinates 90 degrees clockwise around the center.")]
-    [SerializeField] private bool rotate90Clockwise = false;
-
-    [Tooltip("Rotate normalized coordinates 90 degrees counter-clockwise around the center.")]
-    [SerializeField] private bool rotate90CounterClockwise = false;
-
     [Header("Debug Colors")]
     [SerializeField] private Color faceCenterColor = new Color(0f, 1f, 0.2f, 0.9f);
     [SerializeField] private Color subtitleTargetColor = new Color(1f, 0.85f, 0f, 0.9f);
@@ -77,6 +61,7 @@ public class FaceDebugOverlay : MonoBehaviour
     [SerializeField] private bool debugLogs = false;
 
     private IFacePositionProvider faceProvider;
+    private ActiveFacePositionProviderRouter coordinateRouter;
     private RectTransform overlayRoot;
     private RectTransform parentRect;
     private Canvas canvas;
@@ -116,6 +101,7 @@ public class FaceDebugOverlay : MonoBehaviour
             return;
 
         faceProvider = faceProviderBehaviour as IFacePositionProvider;
+        coordinateRouter = faceProviderBehaviour as ActiveFacePositionProviderRouter;
         bool hasFace = faceProvider != null && faceProvider.HasFace;
         bool hasBounds = hasFace && HasBoundingBox(faceProvider.NormalizedFaceRect);
         bool usingBoundsAnchor = hasBounds && useBoundsTopAnchor;
@@ -210,6 +196,10 @@ public class FaceDebugOverlay : MonoBehaviour
         overlayRoot.offsetMax = Vector2.zero;
         overlayRoot.pivot = new Vector2(0.5f, 0.5f);
         overlayRoot.SetAsLastSibling();
+
+        CanvasGroup canvasGroup = overlayRoot.gameObject.AddComponent<CanvasGroup>();
+        canvasGroup.interactable = false;
+        canvasGroup.blocksRaycasts = false;
 
         faceCenterImage = CreateImage("FaceCenter", overlayRoot);
         subtitleTargetImage = CreateImage("SubtitleTarget", overlayRoot);
@@ -354,24 +344,23 @@ public class FaceDebugOverlay : MonoBehaviour
 
     private Vector2 TransformProviderPoint(Vector2 normalizedPosition)
     {
-        return FaceCoordinateTransform.TransformPoint(
-            normalizedPosition,
-            mirrorX,
-            invertY,
-            swapXY,
-            rotate90Clockwise,
-            rotate90CounterClockwise);
+        // The overlay uses the same active mapping as the subtitle target. Front AR
+        // and Back 2D have separate router settings because ARCamera/screen projection
+        // and MediaPipe/CPU image coordinates can disagree on origin and mirroring.
+        // Keep provider pre-corrections and display transforms from being applied twice.
+        return FaceCoordinateTransform.TransformPoint(normalizedPosition, GetActiveTransformSettings());
     }
 
     private Rect TransformProviderRect(Rect normalizedRect)
     {
-        return FaceCoordinateTransform.TransformRect(
-            normalizedRect,
-            mirrorX,
-            invertY,
-            swapXY,
-            rotate90Clockwise,
-            rotate90CounterClockwise);
+        return FaceCoordinateTransform.TransformRect(normalizedRect, GetActiveTransformSettings());
+    }
+
+    private FaceCoordinateTransformSettings GetActiveTransformSettings()
+    {
+        return coordinateRouter != null
+            ? coordinateRouter.CurrentTransformSettings
+            : FaceCoordinateTransformSettings.CurrentMobileDefault;
     }
 
     private Vector2 WorldToOverlayAnchoredPosition(Vector3 worldPosition)
@@ -406,25 +395,29 @@ public class FaceDebugOverlay : MonoBehaviour
         nextLogTime = Time.unscaledTime + 0.5f;
 
         string providerSource = faceProvider != null ? faceProvider.SourceName : "None";
+        string activeMode = coordinateRouter != null ? coordinateRouter.CurrentMode.ToString() : "DirectProvider";
+        string routerProvider = coordinateRouter != null ? coordinateRouter.CurrentProviderName : "NoRouter";
+        FaceCoordinateTransformSettings transformSettings = GetActiveTransformSettings();
         string targetName = subtitleTarget != null ? subtitleTarget.name : "null";
         Vector2 center = faceProvider != null ? faceProvider.NormalizedFaceCenter : Vector2.zero;
         Vector2 transformedCenter = faceProvider != null ? TransformProviderPoint(center) : Vector2.zero;
         Rect rect = faceProvider != null ? faceProvider.NormalizedFaceRect : Rect.zero;
         Rect transformedRect = faceProvider != null ? TransformProviderRect(rect) : Rect.zero;
+        bool boundsValid = HasBoundingBox(rect);
         float faceHeight = transformedRect.height;
         float adaptivePadding = faceHeight > 0.001f ? baseBoundsPaddingNormalized + (faceHeight * boundsHeightPaddingMultiplier) : 0f;
         string state =
-            $"provider={providerSource} hasFace={hasFace} " +
-            $"rawCenter={center} transformedCenter={transformedCenter} " +
+            $"activeMode={activeMode} provider={providerSource} routerProvider={routerProvider} usingRouterSettings={(coordinateRouter != null)} transform={transformSettings} hasFace={hasFace} boundsValid={boundsValid} " +
+            $"rawCenter={center} rawCenter.x={center.x:0.000} transformedCenter={transformedCenter} transformedCenter.x={transformedCenter.x:0.000} " +
+            $"rawBounds.center.x={rect.center.x:0.000} transformedBounds.center.x={transformedRect.center.x:0.000} " +
             $"rawBounds=min({rect.xMin:0.000},{rect.yMin:0.000}) max({rect.xMax:0.000},{rect.yMax:0.000}) size({rect.width:0.000},{rect.height:0.000}) " +
             $"transformedBounds=min({transformedRect.xMin:0.000},{transformedRect.yMin:0.000}) max({transformedRect.xMax:0.000},{transformedRect.yMax:0.000}) size({transformedRect.width:0.000},{transformedRect.height:0.000}) " +
             $"faceHeight={faceHeight:0.000} adaptivePadding={adaptivePadding:0.000} useBoundsTopAnchor={useBoundsTopAnchor} " +
-            $"basePadding={baseBoundsPaddingNormalized} heightPaddingMultiplier={boundsHeightPaddingMultiplier} fallbackOffset={fallbackCenterOffsetNormalized} " +
-            $"mirrorX={mirrorX} invertY={invertY} swapXY={swapXY} rotate90Clockwise={rotate90Clockwise} rotate90CounterClockwise={rotate90CounterClockwise} subtitleTarget={targetName}";
+            $"basePadding={baseBoundsPaddingNormalized} heightPaddingMultiplier={boundsHeightPaddingMultiplier} fallbackOffset={fallbackCenterOffsetNormalized} subtitleTarget={targetName}";
         if (state == lastLogState)
             return;
 
         lastLogState = state;
-        Debug.Log($"[FaceDebugOverlay] {state}", this);
+        Debug.Log($"[FaceCoordinateMapping] consumer=DebugOverlay {state}", this);
     }
 }

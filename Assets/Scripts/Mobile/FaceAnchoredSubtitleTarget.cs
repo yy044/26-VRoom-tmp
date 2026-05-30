@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.UI;
 
 public class FaceAnchoredSubtitleTarget : MonoBehaviour
 {
@@ -42,25 +43,12 @@ public class FaceAnchoredSubtitleTarget : MonoBehaviour
     [Tooltip("SmoothDamp time used when moving the subtitle target.")]
     [SerializeField] private float smoothTime = 0.08f;
 
-    [Header("Coordinate Mapping")]
-    [Tooltip("Mirror the provider's normalized X coordinate before mapping to UI.")]
-    [SerializeField] private bool mirrorX = true;
-
-    [Tooltip("Invert the provider's normalized Y coordinate before mapping to UI.")]
-    [SerializeField] private bool invertY = true;
-
-    [Tooltip("Swap normalized X/Y before optional 90 degree rotations.")]
-    [SerializeField] private bool swapXY = false;
-
-    [Tooltip("Rotate normalized coordinates 90 degrees clockwise around the center.")]
-    [SerializeField] private bool rotate90Clockwise = false;
-
-    [Tooltip("Rotate normalized coordinates 90 degrees counter-clockwise around the center.")]
-    [SerializeField] private bool rotate90CounterClockwise = false;
-
     [Header("Debug")]
     [Tooltip("Emit throttled subtitle positioning logs.")]
     [SerializeField] private bool debugLogs = false;
+
+    [Tooltip("Emit back-camera-only face position logs, including final UI position.")]
+    [SerializeField] private bool debugBackCameraFacePosition = false;
 
     [Header("Diagnostics")]
     [SerializeField] private float currentFaceHeight;
@@ -68,6 +56,7 @@ public class FaceAnchoredSubtitleTarget : MonoBehaviour
     [SerializeField] private Vector2 currentAnchorPosition;
 
     private IFacePositionProvider faceProvider;
+    private ActiveFacePositionProviderRouter coordinateRouter;
     private RectTransform parentRect;
     private Canvas canvas;
     private Vector2 velocity;
@@ -80,6 +69,13 @@ public class FaceAnchoredSubtitleTarget : MonoBehaviour
     private void Awake()
     {
         AutoBind();
+        DisableTargetRaycasts();
+    }
+
+    private void OnEnable()
+    {
+        AutoBind();
+        DisableTargetRaycasts();
     }
 
     private void OnValidate()
@@ -109,6 +105,7 @@ public class FaceAnchoredSubtitleTarget : MonoBehaviour
             Mathf.Max(0.001f, smoothTime));
 
         LogPosition(hasFace, normalizedPosition, mode);
+        LogBackCameraFacePosition(hasFace, normalizedPosition, desiredAnchoredPosition, mode);
     }
 
     private void AutoBind()
@@ -123,6 +120,24 @@ public class FaceAnchoredSubtitleTarget : MonoBehaviour
             canvas = target.GetComponentInParent<Canvas>();
 
         faceProvider = faceProviderBehaviour as IFacePositionProvider;
+        coordinateRouter = faceProviderBehaviour as ActiveFacePositionProviderRouter;
+    }
+
+    private void DisableTargetRaycasts()
+    {
+        if (target == null)
+            return;
+
+        Graphic[] graphics = target.GetComponentsInChildren<Graphic>(true);
+        foreach (Graphic graphic in graphics)
+            graphic.raycastTarget = false;
+
+        CanvasGroup[] canvasGroups = target.GetComponentsInChildren<CanvasGroup>(true);
+        foreach (CanvasGroup canvasGroup in canvasGroups)
+        {
+            canvasGroup.interactable = false;
+            canvasGroup.blocksRaycasts = false;
+        }
     }
 
     private Vector2 GetTargetNormalizedPosition(out bool hasFace, out string mode)
@@ -202,24 +217,23 @@ public class FaceAnchoredSubtitleTarget : MonoBehaviour
 
     private Vector2 TransformProviderPoint(Vector2 normalizedPosition)
     {
-        return FaceCoordinateTransform.TransformPoint(
-            normalizedPosition,
-            mirrorX,
-            invertY,
-            swapXY,
-            rotate90Clockwise,
-            rotate90CounterClockwise);
+        // Display mapping is intentionally centralized in ActiveFacePositionProviderRouter.
+        // Front AR comes from ARCamera/screen projection while Back 2D comes from MediaPipe
+        // CPU image coordinates; they do not guarantee the same origin, handedness, or mirror.
+        // Do not add another mirror/invert here or the center and bounds will diverge.
+        return FaceCoordinateTransform.TransformPoint(normalizedPosition, GetActiveTransformSettings());
     }
 
     private Rect TransformProviderRect(Rect normalizedRect)
     {
-        return FaceCoordinateTransform.TransformRect(
-            normalizedRect,
-            mirrorX,
-            invertY,
-            swapXY,
-            rotate90Clockwise,
-            rotate90CounterClockwise);
+        return FaceCoordinateTransform.TransformRect(normalizedRect, GetActiveTransformSettings());
+    }
+
+    private FaceCoordinateTransformSettings GetActiveTransformSettings()
+    {
+        return coordinateRouter != null
+            ? coordinateRouter.CurrentTransformSettings
+            : FaceCoordinateTransformSettings.CurrentMobileDefault;
     }
 
     private static bool HasValidBounds(Rect normalizedRect)
@@ -281,24 +295,52 @@ public class FaceAnchoredSubtitleTarget : MonoBehaviour
         nextLogTime = Time.unscaledTime + 0.5f;
 
         string providerSource = faceProvider != null ? faceProvider.SourceName : "None";
+        string activeMode = coordinateRouter != null ? coordinateRouter.CurrentMode.ToString() : "DirectProvider";
+        string routerProvider = coordinateRouter != null ? coordinateRouter.CurrentProviderName : "NoRouter";
+        FaceCoordinateTransformSettings transformSettings = GetActiveTransformSettings();
         string targetName = target != null ? target.name : "null";
         Vector2 rawCenter = faceProvider != null ? faceProvider.NormalizedFaceCenter : Vector2.zero;
         Vector2 transformedCenter = faceProvider != null ? TransformProviderPoint(rawCenter) : Vector2.zero;
         Rect rawBounds = faceProvider != null ? faceProvider.NormalizedFaceRect : Rect.zero;
         Rect transformedBounds = faceProvider != null ? TransformProviderRect(rawBounds) : Rect.zero;
+        bool boundsValid = HasValidBounds(rawBounds);
         string state =
-            $"provider={providerSource} hasFace={hasFace} " +
-            $"rawCenter={rawCenter} transformedCenter={transformedCenter} " +
+            $"activeMode={activeMode} provider={providerSource} routerProvider={routerProvider} usingRouterSettings={(coordinateRouter != null)} transform={transformSettings} hasFace={hasFace} boundsValid={boundsValid} " +
+            $"rawCenter={rawCenter} rawCenter.x={rawCenter.x:0.000} transformedCenter={transformedCenter} transformedCenter.x={transformedCenter.x:0.000} " +
+            $"rawBounds.center.x={rawBounds.center.x:0.000} transformedBounds.center.x={transformedBounds.center.x:0.000} " +
             $"rawBounds=min({rawBounds.xMin:0.000},{rawBounds.yMin:0.000}) max({rawBounds.xMax:0.000},{rawBounds.yMax:0.000}) size({rawBounds.width:0.000},{rawBounds.height:0.000}) " +
             $"transformedBounds=min({transformedBounds.xMin:0.000},{transformedBounds.yMin:0.000}) max({transformedBounds.xMax:0.000},{transformedBounds.yMax:0.000}) size({transformedBounds.width:0.000},{transformedBounds.height:0.000}) " +
             $"normalized={normalizedPosition} mode={mode} useBoundsTopAnchor={useBoundsTopAnchor} " +
             $"faceHeight={currentFaceHeight:0.000} adaptivePadding={currentAdaptivePadding:0.000} anchor={currentAnchorPosition} " +
-            $"basePadding={baseBoundsPaddingNormalized} heightPaddingMultiplier={boundsHeightPaddingMultiplier} fallbackOffset={fallbackCenterOffsetNormalized} " +
-            $"mirrorX={mirrorX} invertY={invertY} swapXY={swapXY} rotate90Clockwise={rotate90Clockwise} rotate90CounterClockwise={rotate90CounterClockwise} target={targetName}";
+            $"basePadding={baseBoundsPaddingNormalized} heightPaddingMultiplier={boundsHeightPaddingMultiplier} fallbackOffset={fallbackCenterOffsetNormalized} target={targetName}";
         if (state == lastLogState)
             return;
 
         lastLogState = state;
-        Debug.Log($"[SubtitlePositionAudit] {state}", this);
+        Debug.Log($"[FaceCoordinateMapping] consumer=SubtitleTarget {state}", this);
+    }
+
+    private void LogBackCameraFacePosition(bool hasFace, Vector2 normalizedPosition, Vector2 desiredAnchoredPosition, string mode)
+    {
+        if (!debugBackCameraFacePosition || !hasFace || coordinateRouter == null)
+            return;
+
+        if (coordinateRouter.CurrentMode != MobileARModeController.MobileTrackingMode.BackFace2D)
+            return;
+
+        Vector2 screenPosition = new Vector2(normalizedPosition.x * Screen.width, normalizedPosition.y * Screen.height);
+        Debug.Log(
+            $"[BackFace2DAudit] FinalUIDebug " +
+            $"mode={mode} " +
+            $"rawProviderCenter={faceProvider.NormalizedFaceCenter} " +
+            $"rawProviderRect={faceProvider.NormalizedFaceRect} " +
+            $"transform={GetActiveTransformSettings()} " +
+            $"correctedUiNormalized={normalizedPosition} " +
+            $"screenPosition={screenPosition} " +
+            $"desiredAnchoredPosition={desiredAnchoredPosition} " +
+            $"currentAnchoredPosition={target.anchoredPosition} " +
+            $"screenSize={Screen.width}x{Screen.height} " +
+            $"screenOrientation={Screen.orientation}",
+            this);
     }
 }

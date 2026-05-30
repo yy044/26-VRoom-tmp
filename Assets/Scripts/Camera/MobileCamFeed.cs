@@ -35,6 +35,7 @@ public class MobileCamFeed : MonoBehaviour
     private RectTransform parentRect;
     private int currentCameraIndex;
     private bool isStarting;
+    private string lastPreviewAuditState;
 
     public Texture CurrentTexture => webcamTexture;
     public string CurrentCameraName { get; private set; } = "";
@@ -121,6 +122,8 @@ public class MobileCamFeed : MonoBehaviour
 
     public void NextRearCamera()
     {
+        Debug.Log("[UIButtonTouchAudit] Camera switch OnClick -> NextRearCamera", this);
+
         if (display == null)
         {
             if (ToggleARCameraFacing())
@@ -320,6 +323,26 @@ public class MobileCamFeed : MonoBehaviour
         float xScale = mirrorX ? -1f : 1f;
         float yScale = webcamTexture.videoVerticallyMirrored ? -1f : 1f;
         displayRect.localScale = new Vector3(xScale, yScale, 1f);
+        LogPreviewTransform(rotation, xScale, yScale, width, height);
+    }
+
+    private void LogPreviewTransform(int rotation, float xScale, float yScale, float width, float height)
+    {
+        string state =
+            $"camera={CurrentCameraName} " +
+            $"mirrorX={mirrorX} " +
+            $"videoRotationAngle={webcamTexture.videoRotationAngle} " +
+            $"videoVerticallyMirrored={webcamTexture.videoVerticallyMirrored} " +
+            $"rawSize={webcamTexture.width}x{webcamTexture.height} " +
+            $"displayRotationZ={-rotation} " +
+            $"displayScale=({xScale:0.0},{yScale:0.0},1.0) " +
+            $"displaySize=({width:0.0},{height:0.0})";
+
+        if (state == lastPreviewAuditState)
+            return;
+
+        lastPreviewAuditState = state;
+        Debug.Log($"[CameraPreviewMapping] {state}", this);
     }
 
     private void OnDestroy()

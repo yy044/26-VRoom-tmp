@@ -10,6 +10,9 @@ using Unity.Collections;
 using UnityEngine;
 using UnityEngine.XR.ARFoundation;
 using UnityEngine.XR.ARSubsystems;
+#if UNITY_ANDROID
+using UnityEngine.Android;
+#endif
 using FaceDetectionResult = Mediapipe.Tasks.Components.Containers.DetectionResult;
 using MpRect = Mediapipe.Tasks.Components.Containers.Rect;
 using TasksRunningMode = Mediapipe.Tasks.Vision.Core.RunningMode;
@@ -35,6 +38,7 @@ public class BackCameraFacePositionProvider : MonoBehaviour, IFacePositionProvid
 
     [Header("References")]
     [SerializeField] private ARCameraManager cameraManager;
+    [SerializeField] private MobileCamFeed cameraPreviewFeed;
 
     [Header("Performance")]
     [SerializeField, Range(1f, 15f)] private float targetFps = 8f;
@@ -63,6 +67,9 @@ public class BackCameraFacePositionProvider : MonoBehaviour, IFacePositionProvid
     [SerializeField] private int stableFrameCountRequired = 15;
     [SerializeField] private float minSwitchIntervalSeconds = 2.0f;
 
+    [Header("Debug")]
+    [SerializeField] private bool debugBackCameraFacePosition = false;
+
     private FaceDetector faceDetector;
     private Texture2D inputTexture;
     private FaceDetectionResult result;
@@ -72,6 +79,7 @@ public class BackCameraFacePositionProvider : MonoBehaviour, IFacePositionProvid
     private UnityRect normalizedFaceRect;
     private float nextFrameTime;
     private float nextMissingCpuImageWarningTime;
+    private float nextRuntimeAuditLogTime;
     private int imageWidth;
     private int imageHeight;
     private string lastAuditState;
@@ -81,10 +89,15 @@ public class BackCameraFacePositionProvider : MonoBehaviour, IFacePositionProvid
     private BackFaceModelMode activeModelKind = BackFaceModelMode.ShortRange;
     private float bestFaceConfidence;
     private float normalizedFaceArea;
+    private MpRect lastRawMediaPipeBox;
+    private bool hasLastRawMediaPipeBox;
     private int nearStableFrameCount;
     private int farStableFrameCount;
     private float lastModelSwitchTime = -999f;
     private bool isSwitchingModel;
+    private bool loggedCpuImageSuccess;
+    private bool loggedMediaPipeImageReceived;
+    private bool loggedDetectionCountPositive;
     private readonly System.Diagnostics.Stopwatch stopwatch = new();
 
     public bool HasFace => hasFace;
@@ -103,6 +116,11 @@ public class BackCameraFacePositionProvider : MonoBehaviour, IFacePositionProvid
 
             return GetModelLabel(ActiveModelName);
         }
+    }
+
+    private void OnEnable()
+    {
+        Debug.Log($"{LogTag} ProviderStarted enabled={enabled} activeInHierarchy={gameObject.activeInHierarchy}", this);
     }
 
     // Disabled pending validated FullRange support.
@@ -133,9 +151,20 @@ public class BackCameraFacePositionProvider : MonoBehaviour, IFacePositionProvid
     {
         AutoBind();
 
+        yield return EnsureCameraPermission();
+
         if (cameraManager == null)
         {
             modelError = "ARCameraManager is not assigned";
+            LogAudit(false, 0);
+            enabled = false;
+            yield break;
+        }
+
+        if (!HasCameraPermission())
+        {
+            modelError = "Camera permission is not granted";
+            Debug.LogWarning($"{LogTag} cameraPermission=not_granted provider cannot acquire AR CPU images.", this);
             LogAudit(false, 0);
             enabled = false;
             yield break;
@@ -162,6 +191,49 @@ public class BackCameraFacePositionProvider : MonoBehaviour, IFacePositionProvid
             enabled = false;
             yield break;
         }
+    }
+
+    private IEnumerator EnsureCameraPermission()
+    {
+#if UNITY_ANDROID && !UNITY_EDITOR
+        bool alreadyGranted = Permission.HasUserAuthorizedPermission(Permission.Camera);
+        Debug.Log($"{LogTag} cameraPermission beforeRequest={(alreadyGranted ? "granted" : "not_granted")}", this);
+
+        if (!alreadyGranted)
+        {
+            Permission.RequestUserPermission(Permission.Camera);
+
+            float deadline = Time.realtimeSinceStartup + 8f;
+            while (!Permission.HasUserAuthorizedPermission(Permission.Camera) &&
+                   Time.realtimeSinceStartup < deadline)
+            {
+                yield return null;
+            }
+        }
+
+        Debug.Log($"{LogTag} cameraPermission afterRequest={GetCameraPermissionStatus()}", this);
+#else
+        Debug.Log($"{LogTag} cameraPermission editor_or_non_android", this);
+#endif
+        yield break;
+    }
+
+    private static bool HasCameraPermission()
+    {
+#if UNITY_ANDROID && !UNITY_EDITOR
+        return Permission.HasUserAuthorizedPermission(Permission.Camera);
+#else
+        return true;
+#endif
+    }
+
+    private static string GetCameraPermissionStatus()
+    {
+#if UNITY_ANDROID && !UNITY_EDITOR
+        return Permission.HasUserAuthorizedPermission(Permission.Camera) ? "granted" : "not_granted";
+#else
+        return "editor_or_non_android";
+#endif
     }
 
     private IEnumerator InitializeDetector(string modelAssetName, BackFaceModelMode modelKind, string reason)
@@ -247,7 +319,13 @@ public class BackCameraFacePositionProvider : MonoBehaviour, IFacePositionProvid
 
     private void Update()
     {
-        if (!isReady || isSwitchingModel || Time.unscaledTime < nextFrameTime)
+        if (!isReady || isSwitchingModel)
+        {
+            LogRuntimeAudit("Waiting", false, 0);
+            return;
+        }
+
+        if (Time.unscaledTime < nextFrameTime)
             return;
 
         nextFrameTime = Time.unscaledTime + 1f / Mathf.Max(1f, targetFps);
@@ -260,6 +338,7 @@ public class BackCameraFacePositionProvider : MonoBehaviour, IFacePositionProvid
         if (cameraManager.currentFacingDirection != CameraFacingDirection.World)
         {
             ClearFace();
+            LogRuntimeAudit("WrongFacingDirection", false, 0);
             LogAudit(false, 0);
             LogModelAudit(false, 0);
             return;
@@ -274,16 +353,22 @@ public class BackCameraFacePositionProvider : MonoBehaviour, IFacePositionProvid
             }
 
             ClearFace();
+            LogRuntimeAudit("NoCpuImage", false, 0);
             LogAudit(false, 0);
             LogModelAudit(false, 0);
             return;
         }
+
+        LogOnce(
+            ref loggedCpuImageSuccess,
+            $"TryAcquireLatestCpuImageSucceeded cpuWidth={cpuImage.width} cpuHeight={cpuImage.height}");
 
         using (cpuImage)
         {
             if (!TryUpdateInputTexture(cpuImage))
             {
                 ClearFace();
+                LogRuntimeAudit("ImageConversionFailed", false, 0);
                 LogAudit(false, 0);
                 LogModelAudit(false, 0);
                 return;
@@ -291,9 +376,15 @@ public class BackCameraFacePositionProvider : MonoBehaviour, IFacePositionProvid
         }
 
         using var image = new Image(inputTexture);
+        LogOnce(
+            ref loggedMediaPipeImageReceived,
+            $"MediaPipeReceivesImage textureWidth={inputTexture.width} textureHeight={inputTexture.height} rotationDegrees={GetMediaPipeRotationDegrees()}");
+
         long timestamp = stopwatch.ElapsedTicks / TimeSpan.TicksPerMillisecond;
         inferenceRan = faceDetector.TryDetectForVideo(image, timestamp, GetImageProcessingOptions(), ref result);
         faceCount = inferenceRan && result.detections != null ? result.detections.Count : 0;
+        if (faceCount > 0)
+            LogOnce(ref loggedDetectionCountPositive, $"DetectionCountPositive count={faceCount}");
 
         if (inferenceRan && TryGetBestDetection(out MpRect bestBox, out bestFaceConfidence))
             SetFaceFromDetection(bestBox);
@@ -301,6 +392,7 @@ public class BackCameraFacePositionProvider : MonoBehaviour, IFacePositionProvid
             ClearFace();
 
         UpdateAutoSwitchScaffold();
+        LogRuntimeAudit("Processed", inferenceRan, faceCount);
         LogAudit(inferenceRan, faceCount);
         LogModelAudit(inferenceRan, faceCount);
     }
@@ -349,37 +441,147 @@ public class BackCameraFacePositionProvider : MonoBehaviour, IFacePositionProvid
 
     private ImageProcessingOptions GetImageProcessingOptions()
     {
-        int rotationDegrees = 0;
+        return new ImageProcessingOptions(rotationDegrees: GetMediaPipeRotationDegrees());
+    }
 
-        switch (UnityScreen.orientation)
-        {
-            case ScreenOrientation.Portrait:
-                rotationDegrees = 90;
-                break;
-            case ScreenOrientation.PortraitUpsideDown:
-                rotationDegrees = 270;
-                break;
-            case ScreenOrientation.LandscapeRight:
-                rotationDegrees = 180;
-                break;
-        }
-
-        return new ImageProcessingOptions(rotationDegrees: rotationDegrees);
+    private int GetMediaPipeRotationDegrees()
+    {
+        // Keep MediaPipe output in raw texture space. Back-camera display rotation is
+        // applied exactly once below using WebCamTexture.videoRotationAngle.
+        return 0;
     }
 
     private void SetFaceFromDetection(MpRect box)
     {
-        float invWidth = imageWidth > 0 ? 1f / imageWidth : 0f;
-        float invHeight = imageHeight > 0 ? 1f / imageHeight : 0f;
-        float left = Mathf.Clamp01(box.left * invWidth);
-        float right = Mathf.Clamp01(box.right * invWidth);
-        float bottom = Mathf.Clamp01(1f - box.bottom * invHeight);
-        float top = Mathf.Clamp01(1f - box.top * invHeight);
+        lastRawMediaPipeBox = box;
+        hasLastRawMediaPipeBox = true;
 
-        normalizedFaceRect = UnityRect.MinMaxRect(left, bottom, right, top);
+        int videoRotationAngle = GetVideoRotationAngle();
+        bool videoVerticallyMirrored = GetVideoVerticallyMirrored();
+        UnityRect rawMediaPipeRect = GetDetectorSpaceRect(box);
+        UnityRect displaySpaceTopLeftRect = RotateTextureRectToDisplaySpace(rawMediaPipeRect, videoRotationAngle);
+        // Back-camera output is raw MediaPipe texture coordinates rotated once into
+        // the displayed preview orientation. It remains top-left-origin and unmirrored;
+        // ActiveFacePositionProviderRouter.Back2DDefault performs the only Y inversion
+        // from MediaPipe/display top-left space into Unity screen bottom-left space.
+        normalizedFaceRect = displaySpaceTopLeftRect;
         normalizedFaceCenter = normalizedFaceRect.center;
         normalizedFaceArea = normalizedFaceRect.width * normalizedFaceRect.height;
         hasFace = true;
+
+        LogBackCameraFacePosition(box, rawMediaPipeRect, displaySpaceTopLeftRect, videoRotationAngle, videoVerticallyMirrored);
+    }
+
+    private UnityRect GetDetectorSpaceRect(MpRect box)
+    {
+        float invDetectorWidth = imageWidth > 0f ? 1f / imageWidth : 0f;
+        float invDetectorHeight = imageHeight > 0f ? 1f / imageHeight : 0f;
+
+        return UnityRect.MinMaxRect(
+            Mathf.Clamp01(box.left * invDetectorWidth),
+            Mathf.Clamp01(box.top * invDetectorHeight),
+            Mathf.Clamp01(box.right * invDetectorWidth),
+            Mathf.Clamp01(box.bottom * invDetectorHeight));
+    }
+
+    private static UnityRect RotateTextureRectToDisplaySpace(UnityRect textureTopLeftRect, int videoRotationAngle)
+    {
+        Vector2 a = RotateTexturePointToDisplaySpace(new Vector2(textureTopLeftRect.xMin, textureTopLeftRect.yMin), videoRotationAngle);
+        Vector2 b = RotateTexturePointToDisplaySpace(new Vector2(textureTopLeftRect.xMin, textureTopLeftRect.yMax), videoRotationAngle);
+        Vector2 c = RotateTexturePointToDisplaySpace(new Vector2(textureTopLeftRect.xMax, textureTopLeftRect.yMin), videoRotationAngle);
+        Vector2 d = RotateTexturePointToDisplaySpace(new Vector2(textureTopLeftRect.xMax, textureTopLeftRect.yMax), videoRotationAngle);
+
+        float minX = Mathf.Min(a.x, b.x, c.x, d.x);
+        float minY = Mathf.Min(a.y, b.y, c.y, d.y);
+        float maxX = Mathf.Max(a.x, b.x, c.x, d.x);
+        float maxY = Mathf.Max(a.y, b.y, c.y, d.y);
+
+        return UnityRect.MinMaxRect(
+            Mathf.Clamp01(minX),
+            Mathf.Clamp01(minY),
+            Mathf.Clamp01(maxX),
+            Mathf.Clamp01(maxY));
+    }
+
+    private static Vector2 RotateTexturePointToDisplaySpace(Vector2 point, int videoRotationAngle)
+    {
+        point.x = Mathf.Clamp01(point.x);
+        point.y = Mathf.Clamp01(point.y);
+
+        return NormalizeRotationDegrees(videoRotationAngle) switch
+        {
+            90 => new Vector2(1f - point.y, point.x),
+            180 => new Vector2(1f - point.x, 1f - point.y),
+            270 => new Vector2(point.y, 1f - point.x),
+            _ => point
+        };
+    }
+
+    private static int NormalizeRotationDegrees(int rotationDegrees)
+    {
+        rotationDegrees %= 360;
+        if (rotationDegrees < 0)
+            rotationDegrees += 360;
+
+        return rotationDegrees;
+    }
+
+    private int GetVideoRotationAngle()
+    {
+        WebCamTexture texture = GetPreviewWebCamTexture();
+        return texture != null ? NormalizeRotationDegrees(texture.videoRotationAngle) : 0;
+    }
+
+    private bool GetVideoVerticallyMirrored()
+    {
+        WebCamTexture texture = GetPreviewWebCamTexture();
+        return texture != null && texture.videoVerticallyMirrored;
+    }
+
+    private WebCamTexture GetPreviewWebCamTexture()
+    {
+        if (cameraPreviewFeed == null)
+            cameraPreviewFeed = FindFirstObjectByType<MobileCamFeed>(FindObjectsInactive.Include);
+
+        if (cameraPreviewFeed == null)
+            return null;
+
+        return cameraPreviewFeed.CurrentTexture as WebCamTexture;
+    }
+
+    private void LogBackCameraFacePosition(
+        MpRect box,
+        UnityRect rawMediaPipeRect,
+        UnityRect displaySpaceTopLeftRect,
+        int videoRotationAngle,
+        bool videoVerticallyMirrored)
+    {
+        if (!debugBackCameraFacePosition)
+            return;
+
+        string facing = cameraManager != null ? cameraManager.currentFacingDirection.ToString() : "NoCameraManager";
+        Vector2 rawCenter = rawMediaPipeRect.center;
+        Vector2 displayCenter = displaySpaceTopLeftRect.center;
+        Vector2 finalUiCenter = new Vector2(displayCenter.x, 1f - displayCenter.y);
+        WebCamTexture texture = GetPreviewWebCamTexture();
+        string cameraTextureSize = texture != null ? $"{texture.width}x{texture.height}" : "no_WebCamTexture";
+        Debug.Log(
+            $"{LogTag} FacePositionDebug " +
+            $"rawMediaPipeBox=left:{box.left},top:{box.top},right:{box.right},bottom:{box.bottom} " +
+            $"rawMediaPipeCenter={rawCenter} " +
+            $"inputImageSize={imageWidth}x{imageHeight} " +
+            $"cameraTextureSize={cameraTextureSize} " +
+            $"screenSize={UnityScreen.width}x{UnityScreen.height} " +
+            $"screenOrientation={UnityScreen.orientation} " +
+            $"webCamTexture.videoRotationAngle={videoRotationAngle} " +
+            $"webCamTexture.videoVerticallyMirrored={videoVerticallyMirrored} " +
+            $"cameraFacing={facing} " +
+            $"mediaPipeRotationDegrees={GetMediaPipeRotationDegrees()} " +
+            $"rotatedDisplaySpaceCenter={displayCenter} " +
+            $"finalUiNormalizedCenter={finalUiCenter} " +
+            $"publishedRect={FormatRect(normalizedFaceRect)} " +
+            $"publishedCenter={normalizedFaceCenter}",
+            this);
     }
 
     private void ClearFace()
@@ -389,19 +591,63 @@ public class BackCameraFacePositionProvider : MonoBehaviour, IFacePositionProvid
         normalizedFaceRect = new UnityRect(0f, 0f, 0f, 0f);
         normalizedFaceArea = 0f;
         bestFaceConfidence = 0f;
+        hasLastRawMediaPipeBox = false;
+    }
+
+    private void LogOnce(ref bool flag, string message)
+    {
+        if (flag)
+            return;
+
+        flag = true;
+        Debug.Log($"{LogTag} {message}", this);
+    }
+
+    private void LogRuntimeAudit(string stage, bool inferenceRan, int faceCount)
+    {
+        if (Time.unscaledTime < nextRuntimeAuditLogTime)
+            return;
+
+        nextRuntimeAuditLogTime = Time.unscaledTime + 1f;
+        Debug.Log(
+            $"{LogTag} Runtime " +
+            $"stage={stage} " +
+            $"enabled={enabled} " +
+            $"activeInHierarchy={gameObject.activeInHierarchy} " +
+            $"cameraPermission={GetCameraPermissionStatus()} " +
+            $"isReady={isReady} " +
+            $"isSwitchingModel={isSwitchingModel} " +
+            $"facing={(cameraManager != null ? cameraManager.currentFacingDirection.ToString() : "NoCameraManager")} " +
+            $"mediaPipeRotationDegrees={GetMediaPipeRotationDegrees()} " +
+            $"webCamTexture.videoRotationAngle={GetVideoRotationAngle()} " +
+            $"webCamTexture.videoVerticallyMirrored={GetVideoVerticallyMirrored()} " +
+            $"publishedCenter={normalizedFaceCenter} " +
+            $"publishedBounds={FormatRect(normalizedFaceRect)} " +
+            $"hasFace={hasFace} " +
+            $"inferenceRan={inferenceRan} " +
+            $"faceCount={faceCount}",
+            this);
     }
 
     private void LogAudit(bool inferenceRan, int faceCount)
     {
         string status = hasFace ? "DETECTED" : "NOT DETECTED";
+        string rawBox = hasLastRawMediaPipeBox
+            ? $"left:{lastRawMediaPipeBox.left},top:{lastRawMediaPipeBox.top},right:{lastRawMediaPipeBox.right},bottom:{lastRawMediaPipeBox.bottom}"
+            : "none";
         string state =
             $"detector=MediaPipe.BlazeFace " +
             $"imageSource=ARCameraManager.TryAcquireLatestCpuImage " +
+            $"cpuImageTransformation={XRCpuImage.Transformation.MirrorY} " +
+            $"mediaPipeRotationDegrees={GetMediaPipeRotationDegrees()} " +
+            $"webCamTexture.videoRotationAngle={GetVideoRotationAngle()} " +
+            $"webCamTexture.videoVerticallyMirrored={GetVideoVerticallyMirrored()} " +
             $"imageWidth={imageWidth} " +
             $"imageHeight={imageHeight} " +
             $"inferenceRan={inferenceRan} " +
             $"faceCount={faceCount} " +
             $"activeModel={activeModelAssetName} " +
+            $"rawMediaPipeBox={rawBox} " +
             $"normalizedCenter={normalizedFaceCenter} " +
             $"normalizedRect={normalizedFaceRect} " +
             $"status={status} " +
@@ -412,6 +658,11 @@ public class BackCameraFacePositionProvider : MonoBehaviour, IFacePositionProvid
 
         lastAuditState = state;
         Debug.Log($"{LogTag} {state}", this);
+    }
+
+    private static string FormatRect(UnityRect rect)
+    {
+        return $"min({rect.xMin:0.000},{rect.yMin:0.000}) max({rect.xMax:0.000},{rect.yMax:0.000}) size({rect.width:0.000},{rect.height:0.000})";
     }
 
     private void LogModelAudit(bool inferenceRan, int faceCount)
@@ -564,6 +815,9 @@ public class BackCameraFacePositionProvider : MonoBehaviour, IFacePositionProvid
     {
         if (cameraManager == null)
             cameraManager = FindFirstObjectByType<ARCameraManager>(FindObjectsInactive.Include);
+
+        if (cameraPreviewFeed == null)
+            cameraPreviewFeed = FindFirstObjectByType<MobileCamFeed>(FindObjectsInactive.Include);
     }
 
     private void OnDestroy()
