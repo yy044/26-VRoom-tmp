@@ -34,7 +34,7 @@ public class MobileARModeController : MonoBehaviour
     public ARRaycastManager raycastManager;
     public ARCameraHandLandmarkerRunner handLandmarkerRunner;
     public MobileARFaceTrackingRunner faceTrackingRunner;
-    public BackCameraFacePositionProvider backFacePositionProvider;
+    [SerializeField] private BackCameraFacePositionProvider backFacePositionProvider;
     public MobileARHeadTracker headTracker;
     public SpeechToTextManager speechToTextManager;
     public TMP_Text statusText;
@@ -49,6 +49,7 @@ public class MobileARModeController : MonoBehaviour
     private float nextStatusTime;
     private string lastBackCameraFaceAuditState;
     private string lastProviderFaceUIStatus;
+    private string lastBackFaceProviderSourceAudit;
 
     public MobileTrackingMode CurrentMode => currentMode;
 
@@ -225,21 +226,51 @@ public class MobileARModeController : MonoBehaviour
         if (faceTrackingRunner == null)
             faceTrackingRunner = FindFirstObjectByType<MobileARFaceTrackingRunner>(FindObjectsInactive.Include);
 
-        if (backFacePositionProvider == null)
-            backFacePositionProvider = FindFirstObjectByType<BackCameraFacePositionProvider>(FindObjectsInactive.Include);
-
-        if (backFacePositionProvider == null && cameraManager != null)
-            backFacePositionProvider = cameraManager.gameObject.AddComponent<BackCameraFacePositionProvider>();
+        BindBackFacePositionProvider();
 
         if (statusText == null)
             statusText = FindStatusText();
+    }
+
+    private void BindBackFacePositionProvider()
+    {
+        string providerSource = "Serialized";
+
+        if (backFacePositionProvider == null && cameraManager != null)
+        {
+            backFacePositionProvider = cameraManager.GetComponent<BackCameraFacePositionProvider>();
+            providerSource = backFacePositionProvider != null ? "ExistingOnCamera" : providerSource;
+        }
+
+        if (backFacePositionProvider == null)
+        {
+            backFacePositionProvider = FindFirstObjectByType<BackCameraFacePositionProvider>(FindObjectsInactive.Include);
+            providerSource = backFacePositionProvider != null ? "ExistingInScene" : providerSource;
+        }
+
+        if (backFacePositionProvider == null && cameraManager != null)
+        {
+            backFacePositionProvider = cameraManager.gameObject.AddComponent<BackCameraFacePositionProvider>();
+            providerSource = "RuntimeCreated";
+        }
+
+        if (backFacePositionProvider == null)
+            providerSource = "Missing";
+
+        string state = $"providerSource={providerSource} modelMode={(backFacePositionProvider != null ? backFacePositionProvider.ModelMode.ToString() : "None")}";
+        if (state == lastBackFaceProviderSourceAudit)
+            return;
+
+        lastBackFaceProviderSourceAudit = state;
+        Debug.Log($"[BackFaceModelAudit] {state}", this);
     }
 
     private void RefreshStatus()
     {
         IFacePositionProvider provider = GetActiveFaceProvider();
         bool hasFace = provider != null && provider.HasFace;
-        string message = hasFace ? "DETECTED" : "NOT DETECTED";
+        string detectionState = hasFace ? "DETECTED" : "NOT DETECTED";
+        string message = $"{GetStatusPrefix(provider)}: {detectionState}";
 
         if (statusText != null)
         {
@@ -314,6 +345,17 @@ public class MobileARModeController : MonoBehaviour
             return faceTrackingRunner;
 
         return null;
+    }
+
+    private string GetStatusPrefix(IFacePositionProvider provider)
+    {
+        if (currentMode == MobileTrackingMode.BackFace2D)
+            return "BACK 2D";
+
+        if (currentMode == MobileTrackingMode.FaceSubtitle || currentMode == MobileTrackingMode.FrontFaceAR)
+            return "FRONT AR";
+
+        return provider != null ? provider.SourceName : "NO FACE PROVIDER";
     }
 
     private void LogProviderFaceUIStatus(IFacePositionProvider provider, string statusTextValue)

@@ -16,10 +16,22 @@ using TasksRunningMode = Mediapipe.Tasks.Vision.Core.RunningMode;
 using UnityRect = UnityEngine.Rect;
 using UnityScreen = UnityEngine.Screen;
 
+public enum BackFaceModelMode
+{
+    [InspectorName("ShortRange (Recommended)")]
+    ShortRange,
+
+    [InspectorName("FullRange (Experimental - not validated with current MediaPipe package)")]
+    FullRange,
+
+    [InspectorName("AutoByFaceSize (Experimental - depends on validated FullRange support)")]
+    AutoByFaceSize
+}
+
 public class BackCameraFacePositionProvider : MonoBehaviour, IFacePositionProvider
 {
     private const string LogTag = "[BackFace2DAudit]";
-    private const string ModelPath = "blaze_face_short_range.bytes";
+    private const string ModelLogTag = "[BackFaceModelAudit]";
 
     [Header("References")]
     [SerializeField] private ARCameraManager cameraManager;
@@ -36,8 +48,20 @@ public class BackCameraFacePositionProvider : MonoBehaviour, IFacePositionProvid
         BaseOptions.Delegate.CPU;
 #endif
     [SerializeField, Range(1, 4)] private int maxFaces = 1;
-    [SerializeField, Range(0f, 1f)] private float minDetectionConfidence = 0.5f;
+    [SerializeField, Range(0f, 1f)] private float shortRangeMinDetectionConfidence = 0.5f;
+    [SerializeField, Range(0f, 1f)] private float fullRangeMinDetectionConfidence = 0.2f;
     [SerializeField, Range(0f, 1f)] private float minSuppressionThreshold = 0.3f;
+
+    [Header("Model Selection")]
+    [SerializeField] private BackFaceModelMode modelMode = BackFaceModelMode.ShortRange;
+    [SerializeField] private string shortRangeModelAssetName = "blaze_face_short_range.bytes";
+    [SerializeField] private string fullRangeModelAssetName = "blaze_face_full_range.bytes";
+
+    [Header("Auto Switch Scaffold")]
+    [SerializeField] private float nearFaceAreaThreshold = 0.12f;
+    [SerializeField] private float farFaceAreaThreshold = 0.06f;
+    [SerializeField] private int stableFrameCountRequired = 15;
+    [SerializeField] private float minSwitchIntervalSeconds = 2.0f;
 
     private FaceDetector faceDetector;
     private Texture2D inputTexture;
@@ -51,13 +75,59 @@ public class BackCameraFacePositionProvider : MonoBehaviour, IFacePositionProvid
     private int imageWidth;
     private int imageHeight;
     private string lastAuditState;
+    private string lastModelAuditState;
     private string modelError = "";
+    private string activeModelAssetName = "";
+    private BackFaceModelMode activeModelKind = BackFaceModelMode.ShortRange;
+    private float bestFaceConfidence;
+    private float normalizedFaceArea;
+    private int nearStableFrameCount;
+    private int farStableFrameCount;
+    private float lastModelSwitchTime = -999f;
+    private bool isSwitchingModel;
     private readonly System.Diagnostics.Stopwatch stopwatch = new();
 
     public bool HasFace => hasFace;
     public Vector2 NormalizedFaceCenter => normalizedFaceCenter;
     public UnityRect NormalizedFaceRect => normalizedFaceRect;
     public string SourceName => "BackFace2D";
+    public BackFaceModelMode ModelMode => modelMode;
+    public BackFaceModelMode ConfiguredModelMode => modelMode;
+    public string ActiveModelName => string.IsNullOrEmpty(activeModelAssetName) ? GetModelAssetName(GetInitialModelKind()) : activeModelAssetName;
+    public string ActiveModelLabel
+    {
+        get
+        {
+            if (modelMode == BackFaceModelMode.AutoByFaceSize)
+                return $"AUTO({GetModelLabel(ActiveModelName)})";
+
+            return GetModelLabel(ActiveModelName);
+        }
+    }
+
+    // Disabled pending validated FullRange support.
+    public void ToggleModelMode()
+    {
+        BackFaceModelMode oldMode = modelMode;
+        BackFaceModelMode newMode = modelMode switch
+        {
+            BackFaceModelMode.ShortRange => BackFaceModelMode.FullRange,
+            BackFaceModelMode.FullRange => BackFaceModelMode.ShortRange,
+            _ => BackFaceModelMode.FullRange
+        };
+
+        SetModelMode(newMode, $"buttonToggle oldMode={oldMode} newMode={newMode}");
+    }
+
+    public void SetShortRange()
+    {
+        SetModelMode(BackFaceModelMode.ShortRange, "SetShortRange");
+    }
+
+    public void SetFullRange()
+    {
+        SetModelMode(BackFaceModelMode.FullRange, "SetFullRange");
+    }
 
     private IEnumerator Start()
     {
@@ -81,35 +151,73 @@ public class BackCameraFacePositionProvider : MonoBehaviour, IFacePositionProvid
                 delegateMode = BaseOptions.Delegate.CPU;
         }
 
-        yield return PrepareModel();
+        activeModelKind = GetInitialModelKind();
+        activeModelAssetName = GetModelAssetName(activeModelKind);
+        yield return InitializeDetector(activeModelAssetName, activeModelKind, "startup");
 
         if (!string.IsNullOrEmpty(modelError))
         {
             LogAudit(false, 0);
+            LogModelAudit(false, 0);
             enabled = false;
+            yield break;
+        }
+    }
+
+    private IEnumerator InitializeDetector(string modelAssetName, BackFaceModelMode modelKind, string reason)
+    {
+        modelError = "";
+        isReady = false;
+        ClearFace();
+
+        faceDetector?.Close();
+        faceDetector = null;
+
+        yield return PrepareModel(modelAssetName);
+
+        if (!string.IsNullOrEmpty(modelError))
+        {
+            Debug.LogError($"{ModelLogTag} failed to load model={modelAssetName} reason={reason} error={modelError}", this);
             yield break;
         }
 
         var options = new FaceDetectorOptions(
-            new BaseOptions(delegateMode, modelAssetPath: ModelPath),
+            new BaseOptions(delegateMode, modelAssetPath: modelAssetName),
             runningMode: TasksRunningMode.VIDEO,
-            minDetectionConfidence: minDetectionConfidence,
+            minDetectionConfidence: GetMinDetectionConfidence(modelKind),
             minSuppressionThreshold: minSuppressionThreshold,
             numFaces: maxFaces);
 
-        faceDetector = FaceDetector.CreateFromOptions(options, GpuManager.GpuResources);
+        try
+        {
+            faceDetector = FaceDetector.CreateFromOptions(options, GpuManager.GpuResources);
+        }
+        catch (Exception ex)
+        {
+            modelError = ex.GetType().Name + ": " + ex.Message;
+            Debug.LogError($"{ModelLogTag} failed to create detector model={modelAssetName} reason={reason} error={modelError}", this);
+            yield break;
+        }
+
+        activeModelKind = modelKind;
+        activeModelAssetName = modelAssetName;
         result = FaceDetectionResult.Alloc(maxFaces);
         stopwatch.Restart();
         isReady = true;
+        nearStableFrameCount = 0;
+        farStableFrameCount = 0;
+        lastModelSwitchTime = Time.unscaledTime;
+        Debug.Log($"{ModelLogTag} loaded model={activeModelAssetName} kind={activeModelKind} reason={reason}", this);
         LogAudit(false, 0);
+        LogModelAudit(false, 0);
     }
 
-    private IEnumerator PrepareModel()
+    private IEnumerator PrepareModel(string modelAssetName)
     {
         IEnumerator prepareRoutine = null;
         try
         {
-            prepareRoutine = AssetLoader.PrepareAssetAsync(ModelPath);
+            prepareRoutine = AssetLoader.PrepareAssetAsync(modelAssetName);
         }
         catch (Exception ex)
         {
@@ -139,18 +247,21 @@ public class BackCameraFacePositionProvider : MonoBehaviour, IFacePositionProvid
 
     private void Update()
     {
-        if (!isReady || Time.unscaledTime < nextFrameTime)
+        if (!isReady || isSwitchingModel || Time.unscaledTime < nextFrameTime)
             return;
 
         nextFrameTime = Time.unscaledTime + 1f / Mathf.Max(1f, targetFps);
 
         bool inferenceRan = false;
         int faceCount = 0;
+        bestFaceConfidence = 0f;
+        normalizedFaceArea = 0f;
 
         if (cameraManager.currentFacingDirection != CameraFacingDirection.World)
         {
             ClearFace();
             LogAudit(false, 0);
+            LogModelAudit(false, 0);
             return;
         }
 
@@ -164,6 +275,7 @@ public class BackCameraFacePositionProvider : MonoBehaviour, IFacePositionProvid
 
             ClearFace();
             LogAudit(false, 0);
+            LogModelAudit(false, 0);
             return;
         }
 
@@ -173,6 +285,7 @@ public class BackCameraFacePositionProvider : MonoBehaviour, IFacePositionProvid
             {
                 ClearFace();
                 LogAudit(false, 0);
+                LogModelAudit(false, 0);
                 return;
             }
         }
@@ -182,12 +295,14 @@ public class BackCameraFacePositionProvider : MonoBehaviour, IFacePositionProvid
         inferenceRan = faceDetector.TryDetectForVideo(image, timestamp, GetImageProcessingOptions(), ref result);
         faceCount = inferenceRan && result.detections != null ? result.detections.Count : 0;
 
-        if (inferenceRan && faceCount > 0)
-            SetFaceFromDetection(result.detections[0].boundingBox);
+        if (inferenceRan && TryGetBestDetection(out MpRect bestBox, out bestFaceConfidence))
+            SetFaceFromDetection(bestBox);
         else
             ClearFace();
 
+        UpdateAutoSwitchScaffold();
         LogAudit(inferenceRan, faceCount);
+        LogModelAudit(inferenceRan, faceCount);
     }
 
     private bool TryUpdateInputTexture(XRCpuImage cpuImage)
@@ -258,6 +373,7 @@ public class BackCameraFacePositionProvider : MonoBehaviour, IFacePositionProvid
 
         normalizedFaceRect = UnityRect.MinMaxRect(left, bottom, right, top);
         normalizedFaceCenter = normalizedFaceRect.center;
+        normalizedFaceArea = normalizedFaceRect.width * normalizedFaceRect.height;
         hasFace = true;
     }
 
@@ -266,6 +382,8 @@ public class BackCameraFacePositionProvider : MonoBehaviour, IFacePositionProvid
         hasFace = false;
         normalizedFaceCenter = Vector2.zero;
         normalizedFaceRect = new UnityRect(0f, 0f, 0f, 0f);
+        normalizedFaceArea = 0f;
+        bestFaceConfidence = 0f;
     }
 
     private void LogAudit(bool inferenceRan, int faceCount)
@@ -278,6 +396,7 @@ public class BackCameraFacePositionProvider : MonoBehaviour, IFacePositionProvid
             $"imageHeight={imageHeight} " +
             $"inferenceRan={inferenceRan} " +
             $"faceCount={faceCount} " +
+            $"activeModel={activeModelAssetName} " +
             $"normalizedCenter={normalizedFaceCenter} " +
             $"normalizedRect={normalizedFaceRect} " +
             $"status={status} " +
@@ -288,6 +407,152 @@ public class BackCameraFacePositionProvider : MonoBehaviour, IFacePositionProvid
 
         lastAuditState = state;
         Debug.Log($"{LogTag} {state}", this);
+    }
+
+    private void LogModelAudit(bool inferenceRan, int faceCount)
+    {
+        string state =
+            $"mode={modelMode} " +
+            $"activeModel={activeModelAssetName} " +
+            $"initialized={isReady} " +
+            $"inferenceRan={inferenceRan} " +
+            $"faceCount={faceCount} " +
+            $"confidence={bestFaceConfidence:0.000} " +
+            $"minDetectionConfidence={GetMinDetectionConfidence(activeModelKind):0.000} " +
+            $"rect={normalizedFaceRect} " +
+            $"area={normalizedFaceArea:0.0000} " +
+            $"autoState=activeKind:{activeModelKind},nearFrames:{nearStableFrameCount},farFrames:{farStableFrameCount},switching:{isSwitchingModel} " +
+            $"modelError={modelError}";
+
+        if (state == lastModelAuditState)
+            return;
+
+        lastModelAuditState = state;
+        Debug.Log($"{ModelLogTag} {state}", this);
+    }
+
+    private bool TryGetBestDetection(out MpRect bestBox, out float confidence)
+    {
+        bestBox = default;
+        confidence = 0f;
+
+        if (result.detections == null || result.detections.Count == 0)
+            return false;
+
+        bool found = false;
+        int bestArea = -1;
+
+        foreach (var detection in result.detections)
+        {
+            MpRect box = detection.boundingBox;
+            int area = Mathf.Max(0, box.right - box.left) * Mathf.Max(0, box.bottom - box.top);
+            if (!found || area > bestArea)
+            {
+                found = true;
+                bestArea = area;
+                bestBox = box;
+                confidence = detection.categories != null && detection.categories.Count > 0
+                    ? detection.categories[0].score
+                    : 0f;
+            }
+        }
+
+        return found;
+    }
+
+    private void UpdateAutoSwitchScaffold()
+    {
+        if (modelMode != BackFaceModelMode.AutoByFaceSize || !hasFace || isSwitchingModel)
+            return;
+
+        if (Time.unscaledTime - lastModelSwitchTime < minSwitchIntervalSeconds)
+            return;
+
+        int requiredFrames = Mathf.Max(1, stableFrameCountRequired);
+
+        if (activeModelKind == BackFaceModelMode.FullRange)
+        {
+            nearStableFrameCount = normalizedFaceArea > nearFaceAreaThreshold ? nearStableFrameCount + 1 : 0;
+            farStableFrameCount = 0;
+
+            if (nearStableFrameCount >= requiredFrames)
+                StartCoroutine(SwitchModel(shortRangeModelAssetName, BackFaceModelMode.ShortRange, $"faceArea {normalizedFaceArea:0.0000} > near {nearFaceAreaThreshold:0.0000}"));
+        }
+        else if (activeModelKind == BackFaceModelMode.ShortRange)
+        {
+            farStableFrameCount = normalizedFaceArea < farFaceAreaThreshold ? farStableFrameCount + 1 : 0;
+            nearStableFrameCount = 0;
+
+            if (farStableFrameCount >= requiredFrames)
+                StartCoroutine(SwitchModel(fullRangeModelAssetName, BackFaceModelMode.FullRange, $"faceArea {normalizedFaceArea:0.0000} < far {farFaceAreaThreshold:0.0000}"));
+        }
+    }
+
+    private IEnumerator SwitchModel(string modelAssetName, BackFaceModelMode modelKind, string reason)
+    {
+        if (isSwitchingModel)
+            yield break;
+
+        isSwitchingModel = true;
+        Debug.Log($"{ModelLogTag} switching from={activeModelAssetName} to={modelAssetName} reason={reason}", this);
+        yield return InitializeDetector(modelAssetName, modelKind, reason);
+        isSwitchingModel = false;
+        LogModelAudit(false, 0);
+    }
+
+    private void SetModelMode(BackFaceModelMode newMode, string reason)
+    {
+        BackFaceModelMode oldMode = modelMode;
+        if (newMode == BackFaceModelMode.AutoByFaceSize)
+            newMode = BackFaceModelMode.FullRange;
+
+        modelMode = newMode;
+        BackFaceModelMode nextModelKind = GetInitialModelKind();
+        string nextModelName = GetModelAssetName(nextModelKind);
+        ClearFace();
+
+        if (!isActiveAndEnabled)
+        {
+            activeModelKind = nextModelKind;
+            activeModelAssetName = nextModelName;
+            isReady = false;
+            LogModelAudit(false, 0);
+            return;
+        }
+
+        StartCoroutine(SwitchModel(nextModelName, nextModelKind, reason));
+    }
+
+    private BackFaceModelMode GetInitialModelKind()
+    {
+        return modelMode == BackFaceModelMode.AutoByFaceSize
+            ? BackFaceModelMode.FullRange
+            : modelMode;
+    }
+
+    private string GetModelAssetName(BackFaceModelMode mode)
+    {
+        return mode == BackFaceModelMode.FullRange
+            ? fullRangeModelAssetName
+            : shortRangeModelAssetName;
+    }
+
+    private float GetMinDetectionConfidence(BackFaceModelMode mode)
+    {
+        return mode == BackFaceModelMode.FullRange
+            ? fullRangeMinDetectionConfidence
+            : shortRangeMinDetectionConfidence;
+    }
+
+    private string GetModelLabel(string modelAssetName)
+    {
+        if (string.Equals(modelAssetName, fullRangeModelAssetName, StringComparison.OrdinalIgnoreCase))
+            return "LONG";
+
+        if (string.Equals(modelAssetName, shortRangeModelAssetName, StringComparison.OrdinalIgnoreCase))
+            return "SHORT";
+
+        return modelAssetName;
     }
 
     private void AutoBind()
