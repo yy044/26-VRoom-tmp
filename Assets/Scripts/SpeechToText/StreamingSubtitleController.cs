@@ -27,6 +27,7 @@ public class StreamingSubtitleController : MonoBehaviour
     private Coroutine boxFadeCoroutine;
 
     private string currentDisplayedText = "";
+    private string lastSubtitleAuditState;
 
     private void Start()
     {
@@ -37,11 +38,13 @@ public class StreamingSubtitleController : MonoBehaviour
 
     public void ReceivePartialText(string text)
     {
+        Debug.Log($"[SubtitleAudit] partial input: {text}", this);
         ReceiveText(text);
     }
 
     public void ReceiveFinalText(string text)
     {
+        Debug.Log($"[SubtitleAudit] final input: {text}", this);
         ReceiveText(text);
     }
 
@@ -75,6 +78,7 @@ public class StreamingSubtitleController : MonoBehaviour
 
         currentDisplayedText = text;
         wordTextTemplate.text = text;
+        LogSubtitleUpdate(text);
     }
 
     private string FormatTextForDisplay(string text)
@@ -211,5 +215,19 @@ public class StreamingSubtitleController : MonoBehaviour
 
         if (wordTextTemplate != null)
             wordTextTemplate.text = "";
+
+        LogSubtitleUpdate("");
+    }
+
+    private void LogSubtitleUpdate(string text)
+    {
+        string targetName = wordTextTemplate != null ? wordTextTemplate.name : "null";
+        string state = $"target={targetName}, text={text}";
+
+        if (state == lastSubtitleAuditState)
+            return;
+
+        lastSubtitleAuditState = state;
+        Debug.Log($"[SubtitleAudit] subtitle UI updated: {state}", this);
     }
 }

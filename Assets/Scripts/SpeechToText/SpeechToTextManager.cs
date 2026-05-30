@@ -32,6 +32,7 @@ public class SpeechToTextManager : MonoBehaviour
     private MobileARHeadTracker mobileHeadTracker;
     private float lastTextTime = -999f;
     private Color originalColor = Color.white;
+    private string lastPlacementAuditState;
 
     private void Awake()
     {
@@ -47,6 +48,7 @@ public class SpeechToTextManager : MonoBehaviour
             originalColor = headLabelText.color;
 
         provider = CreateProvider();
+        Debug.Log($"[STTAudit] provider selected: {providerType}, providerInstance={(provider != null ? provider.GetType().Name : "null")}", this);
 
         if (provider == null)
             return;
@@ -55,6 +57,7 @@ public class SpeechToTextManager : MonoBehaviour
         provider.OnPartialText += QueuePartialText;
         provider.OnFinalText += QueueFinalText;
         provider.StartListening();
+        Debug.Log($"[STTAudit] STT started: provider={provider.GetType().Name}, streamReceiver={(sttStreamReceiver != null ? sttStreamReceiver.name : "null")}", this);
     }
 
     private void Update()
@@ -141,10 +144,12 @@ public class SpeechToTextManager : MonoBehaviour
 
         if (sttStreamReceiver != null)
         {
+            Debug.Log($"[STTAudit] partial transcript -> SttStreamReceiver: {text}", this);
             sttStreamReceiver.OnPartialTextReceived(text);
             return;
         }
 
+        Debug.Log($"[STTAudit] partial transcript -> direct subtitle TMP: {text}", this);
         SetSubtitle(text);
     }
 
@@ -153,14 +158,16 @@ public class SpeechToTextManager : MonoBehaviour
         if (string.IsNullOrWhiteSpace(text))
             return;
 
-        Debug.Log($"STT Final: {text}");
+        Debug.Log($"[STTAudit] final transcript received: {text}", this);
 
         if (sttStreamReceiver != null)
         {
+            Debug.Log($"[STTAudit] final transcript -> SttStreamReceiver: {text}", this);
             sttStreamReceiver.OnFinalTextReceived(text);
             return;
         }
 
+        Debug.Log($"[STTAudit] final transcript -> direct subtitle TMP: {text}", this);
         SetSubtitle(text);
     }
 
@@ -177,6 +184,7 @@ public class SpeechToTextManager : MonoBehaviour
         headLabelText.text = text;
         lastTextTime = Time.time;
         SetAlpha(1f);
+        Debug.Log($"[SubtitleAudit] direct TMP updated: object={headLabelText.name}, text={text}", this);
     }
 
     private void SetAlpha(float alpha)
@@ -231,6 +239,12 @@ public class SpeechToTextManager : MonoBehaviour
 
         mobileHeadTracker.useFaceTrackingPosition = useFaceTrackingSubtitle;
         mobileHeadTracker.fixedAnchoredPosition = fixedSubtitlePosition;
+        string placementState = $"useFaceTracking={useFaceTrackingSubtitle}, fixed={fixedSubtitlePosition}";
+        if (placementState != lastPlacementAuditState)
+        {
+            lastPlacementAuditState = placementState;
+            Debug.Log($"[SubtitlePositionAudit] SpeechToTextManager placement settings applied: {placementState}", this);
+        }
     }
 
     private void OnDestroy()
@@ -241,6 +255,7 @@ public class SpeechToTextManager : MonoBehaviour
         provider.OnPartialText -= QueuePartialText;
         provider.OnFinalText -= QueueFinalText;
         provider.StopListening();
+        Debug.Log($"[STTAudit] STT stopped: provider={provider.GetType().Name}", this);
     }
 
     private readonly struct SpeechTextEvent

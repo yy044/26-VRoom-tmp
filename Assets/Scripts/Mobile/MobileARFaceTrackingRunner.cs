@@ -1,12 +1,18 @@
+using System.Collections;
 using System;
 using UnityEngine;
 using UnityEngine.XR.ARFoundation;
+using UnityEngine.XR.ARSubsystems;
 
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
 #endif
 
-public class MobileARFaceTrackingRunner : MonoBehaviour
+#if UNITY_ANDROID
+using UnityEngine.Android;
+#endif
+
+public class MobileARFaceTrackingRunner : MonoBehaviour, IFacePositionProvider
 {
     public enum TrackingSource
     {
@@ -52,15 +58,42 @@ public class MobileARFaceTrackingRunner : MonoBehaviour
     private MobileFaceDetection latestDetection;
     private bool hasLatestDetection;
     private float nextWarningTime;
+    private bool availabilityCheckStarted;
+    private bool availabilityCheckCompleted;
+    private string availabilityResult = "not started";
+    private bool installAttempted;
+    private string installResult = "not attempted";
+    private ARSessionState previousSessionState = ARSessionState.None;
+    private string lastFaceAuditState;
+    private string lastSessionAuditState;
+    private string lastFaceUIStatus;
 
     public int ImageWidth => Mathf.Max(1, Screen.width);
     public int ImageHeight => Mathf.Max(1, Screen.height);
     public bool HasRealFaceTracking { get; private set; }
     public int FaceTrackableCount { get; private set; }
+    public bool HasFace => HasRealFaceTracking && hasLatestDetection;
+    public Vector2 NormalizedFaceCenter => hasLatestDetection ? latestDetection.normalizedCenter : Vector2.zero;
+    public Rect NormalizedFaceRect => hasLatestDetection ? latestDetection.normalizedRect : new Rect(0f, 0f, 0f, 0f);
+    public string SourceName => "FrontFaceAR";
 
     private void Awake()
     {
         AutoBind();
+    }
+
+    private void OnEnable()
+    {
+        previousSessionState = ARSession.state;
+        ARSession.stateChanged += OnARSessionStateChanged;
+
+        if (!availabilityCheckStarted)
+            StartCoroutine(RunAvailabilityAudit());
+    }
+
+    private void OnDisable()
+    {
+        ARSession.stateChanged -= OnARSessionStateChanged;
     }
 
     private void Update()
@@ -85,6 +118,8 @@ public class MobileARFaceTrackingRunner : MonoBehaviour
                 SetFallbackDetection();
                 break;
         }
+
+        LogFaceAudit();
     }
 
     public bool TryGetLatestResult(ref MobileFaceDetection result)
@@ -137,11 +172,11 @@ public class MobileARFaceTrackingRunner : MonoBehaviour
     {
         AutoBind();
 
-        if (faceManager == null || trackingCamera == null)
+        if (faceManager == null || faceManager.subsystem == null || !faceManager.subsystem.running)
         {
             FaceTrackableCount = 0;
             HasRealFaceTracking = false;
-            WarnThrottled("AR face tracking requested, but ARFaceManager or tracking camera is missing.");
+            WarnThrottled("AR face tracking requested, but ARFaceManager subsystem is not running.");
             SetMissingARFaceDetection();
             return;
         }
@@ -151,9 +186,22 @@ public class MobileARFaceTrackingRunner : MonoBehaviour
         foreach (ARFace face in faceManager.trackables)
         {
             FaceTrackableCount++;
+            HasRealFaceTracking = true;
+
+            if (trackingCamera == null)
+            {
+                latestDetection = new MobileFaceDetection();
+                hasLatestDetection = true;
+                return;
+            }
+
             Vector3 screenPosition = trackingCamera.WorldToScreenPoint(face.transform.position);
             if (screenPosition.z < 0f)
-                continue;
+            {
+                latestDetection = new MobileFaceDetection();
+                hasLatestDetection = true;
+                return;
+            }
 
             SetNormalizedTarget(new Vector2(
                 Mathf.Clamp01(screenPosition.x / ImageWidth),
@@ -210,6 +258,146 @@ public class MobileARFaceTrackingRunner : MonoBehaviour
 
         if (faceManager == null)
             faceManager = FindFirstObjectByType<ARFaceManager>(FindObjectsInactive.Include);
+    }
+
+    private void LogFaceAudit()
+    {
+        ARCameraManager cameraManager = trackingCamera != null
+            ? trackingCamera.GetComponent<ARCameraManager>()
+            : FindFirstObjectByType<ARCameraManager>(FindObjectsInactive.Include);
+
+        bool hasFaceManager = faceManager != null;
+        bool subsystemNull = faceManager == null || faceManager.subsystem == null;
+        bool subsystemRunning = faceManager != null && faceManager.subsystem != null && faceManager.subsystem.running;
+        int faceCount = CountTrackables();
+        string facing = cameraManager != null ? cameraManager.currentFacingDirection.ToString() : "No ARCameraManager";
+        string state =
+            $"ARSession.state={ARSession.state} " +
+            $"ARSession.notTrackingReason={ARSession.notTrackingReason} " +
+            $"CheckAvailability.result={availabilityResult} " +
+            $"cameraPermission={GetCameraPermissionStatus()} " +
+            $"ARCameraManager.currentFacingDirection={facing} " +
+            $"ARFaceManager.subsystemRunning={subsystemRunning} " +
+            $"ARFaceManager.trackables.count={faceCount} " +
+            $"HasRealFaceTracking={HasRealFaceTracking}";
+
+        if (state == lastFaceAuditState)
+            return;
+
+        lastFaceAuditState = state;
+
+        Debug.Log(
+            $"[ARFaceAudit] {state} " +
+            $"ARFaceManager.exists={hasFaceManager} " +
+            $"ARFaceManager.enabled={(faceManager != null && faceManager.enabled)} " +
+            $"ARFaceManager.subsystemNull={subsystemNull} " +
+            $"Application.platform={Application.platform} " +
+            $"deviceModel={SystemInfo.deviceModel}",
+            this);
+
+        LogSessionAudit();
+        LogFaceUIStatus(faceCount);
+    }
+
+    private IEnumerator RunAvailabilityAudit()
+    {
+        availabilityCheckStarted = true;
+        availabilityResult = $"started from state {ARSession.state}";
+
+        yield return ARSession.CheckAvailability();
+        availabilityCheckCompleted = true;
+        availabilityResult = ARSession.state.ToString();
+        LogFaceAudit();
+
+        if (ARSession.state == ARSessionState.NeedsInstall)
+        {
+            installAttempted = true;
+            installResult = "started";
+
+            yield return ARSession.Install();
+            installResult = ARSession.state.ToString();
+            LogFaceAudit();
+        }
+    }
+
+    private void OnARSessionStateChanged(ARSessionStateChangedEventArgs args)
+    {
+        Debug.Log(
+            $"[ARSessionAudit] stateChanged: {previousSessionState} -> {args.state}, " +
+            $"notTrackingReason={ARSession.notTrackingReason}",
+            this);
+
+        previousSessionState = args.state;
+    }
+
+    private void LogSessionAudit()
+    {
+        ARCameraManager cameraManager = trackingCamera != null
+            ? trackingCamera.GetComponent<ARCameraManager>()
+            : FindFirstObjectByType<ARCameraManager>(FindObjectsInactive.Include);
+
+        bool subsystemPresent = faceManager != null && faceManager.subsystem != null;
+        bool subsystemRunning = subsystemPresent && faceManager.subsystem.running;
+        int faceCount = CountTrackables();
+        string facing = cameraManager != null ? cameraManager.currentFacingDirection.ToString() : "No ARCameraManager";
+        string state =
+            $"ARSession.state={ARSession.state} " +
+            $"ARSession.notTrackingReason={ARSession.notTrackingReason} " +
+            $"CheckAvailability.result={availabilityResult} " +
+            $"cameraPermission={GetCameraPermissionStatus()} " +
+            $"ARCameraManager.currentFacingDirection={facing} " +
+            $"ARFaceManager.subsystemRunning={subsystemRunning} " +
+            $"ARFaceManager.trackables.count={faceCount} " +
+            $"HasRealFaceTracking={HasRealFaceTracking}";
+
+        if (state == lastSessionAuditState)
+            return;
+
+        lastSessionAuditState = state;
+
+        Debug.Log(
+            $"[ARSessionAudit] {state} " +
+            $"CheckAvailability.started={availabilityCheckStarted} " +
+            $"CheckAvailability.completed={availabilityCheckCompleted} " +
+            $"Install.attempted={installAttempted} " +
+            $"Install.result={installResult} " +
+            $"Application.platform={Application.platform} " +
+            $"deviceModel={SystemInfo.deviceModel} " +
+            $"ARFaceManager.subsystemPresent={subsystemPresent}",
+            this);
+    }
+
+    private void LogFaceUIStatus(int faceCount)
+    {
+        string status = HasRealFaceTracking ? "DETECTED" : "NOT DETECTED";
+        string state = $"hasRealFaceTracking={HasRealFaceTracking} trackables.count={faceCount} statusText={status}";
+
+        if (state == lastFaceUIStatus)
+            return;
+
+        lastFaceUIStatus = state;
+        Debug.Log($"[FaceUIStatus] {state}", this);
+    }
+
+    private static string GetCameraPermissionStatus()
+    {
+#if UNITY_ANDROID
+        return Permission.HasUserAuthorizedPermission(Permission.Camera) ? "granted" : "not granted";
+#else
+        return "not applicable";
+#endif
+    }
+
+    private int CountTrackables()
+    {
+        if (faceManager == null || faceManager.subsystem == null || !faceManager.subsystem.running)
+            return 0;
+
+        int count = 0;
+        foreach (ARFace face in faceManager.trackables)
+            count++;
+
+        return count;
     }
 
     private static bool TryReadPointerPosition(out Vector2 position)

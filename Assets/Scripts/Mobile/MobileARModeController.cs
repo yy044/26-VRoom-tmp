@@ -3,23 +3,26 @@ using TMPro;
 using Unity.XR.CoreUtils;
 using UnityEngine;
 using UnityEngine.XR.ARFoundation;
+using UnityEngine.XR.ARSubsystems;
 
 public class MobileARModeController : MonoBehaviour
 {
     public enum MobileTrackingMode
     {
         WorldHands,
-        FaceSubtitle
+        FaceSubtitle,
+        FrontFaceAR,
+        BackFace2D
     }
 
     private const string LogTag = "[MobileARMode]";
 
     [Header("Mode")]
-    public MobileTrackingMode startupMode = MobileTrackingMode.WorldHands;
+    public MobileTrackingMode startupMode = MobileTrackingMode.FrontFaceAR;
     public bool applyStartupModeOnStart = true;
     public bool restartSessionOnModeChange = true;
     public float sessionResetDelaySeconds = 0.15f;
-    public bool fixedSubtitleFallbackWhenFaceMissing = true;
+    public bool fixedSubtitleFallbackWhenFaceMissing = false;
 
     [Header("References")]
     public GameObject facePrefab;
@@ -31,6 +34,7 @@ public class MobileARModeController : MonoBehaviour
     public ARRaycastManager raycastManager;
     public ARCameraHandLandmarkerRunner handLandmarkerRunner;
     public MobileARFaceTrackingRunner faceTrackingRunner;
+    public BackCameraFacePositionProvider backFacePositionProvider;
     public MobileARHeadTracker headTracker;
     public SpeechToTextManager speechToTextManager;
     public TMP_Text statusText;
@@ -43,6 +47,8 @@ public class MobileARModeController : MonoBehaviour
     private MobileTrackingMode currentMode;
     private Coroutine switchRoutine;
     private float nextStatusTime;
+    private string lastBackCameraFaceAuditState;
+    private string lastProviderFaceUIStatus;
 
     public MobileTrackingMode CurrentMode => currentMode;
 
@@ -77,15 +83,28 @@ public class MobileARModeController : MonoBehaviour
     [ContextMenu("Set Face Subtitle Mode")]
     public void SetFaceSubtitleMode()
     {
-        SetMode(MobileTrackingMode.FaceSubtitle);
+        SetMode(MobileTrackingMode.FrontFaceAR);
+    }
+
+    [ContextMenu("Set Front Face AR Mode")]
+    public void SetFrontFaceARMode()
+    {
+        SetMode(MobileTrackingMode.FrontFaceAR);
+    }
+
+    [ContextMenu("Set Back Face 2D Mode")]
+    public void SetBackFace2DMode()
+    {
+        SetMode(MobileTrackingMode.BackFace2D);
     }
 
     [ContextMenu("Toggle Mode")]
     public void ToggleMode()
     {
         SetMode(currentMode == MobileTrackingMode.FaceSubtitle
-            ? MobileTrackingMode.WorldHands
-            : MobileTrackingMode.FaceSubtitle);
+            || currentMode == MobileTrackingMode.FrontFaceAR
+            ? MobileTrackingMode.BackFace2D
+            : MobileTrackingMode.FrontFaceAR);
     }
 
     public void SetMode(MobileTrackingMode mode)
@@ -103,9 +122,12 @@ public class MobileARModeController : MonoBehaviour
     private IEnumerator ApplyModeRoutine(MobileTrackingMode mode)
     {
         currentMode = mode;
-        bool useFaceMode = mode == MobileTrackingMode.FaceSubtitle;
+        bool useFrontFaceMode = mode == MobileTrackingMode.FaceSubtitle || mode == MobileTrackingMode.FrontFaceAR;
+        bool useBackFaceMode = mode == MobileTrackingMode.BackFace2D;
+        bool useFaceMode = useFrontFaceMode || useBackFaceMode;
 
-        SetEnabled(faceManager, useFaceMode);
+        SetEnabled(faceManager, useFrontFaceMode);
+        SetEnabled(backFacePositionProvider, useBackFaceMode);
         SetEnabled(handLandmarkerRunner, !useFaceMode);
         SetEnabled(planeManager, !useFaceMode);
         SetEnabled(raycastManager, !useFaceMode);
@@ -115,22 +137,13 @@ public class MobileARModeController : MonoBehaviour
             faceTrackingRunner.faceManager = faceManager;
             faceTrackingRunner.trackingCamera = cameraManager != null ? cameraManager.GetComponent<Camera>() : Camera.main;
             faceTrackingRunner.fallbackWhenARFaceMissing = fixedSubtitleFallbackWhenFaceMissing;
-            faceTrackingRunner.trackingSource = useFaceMode
+            faceTrackingRunner.trackingSource = useFrontFaceMode
                 ? MobileARFaceTrackingRunner.TrackingSource.ARFaceManager
-                : MobileARFaceTrackingRunner.TrackingSource.ScreenCenterFallback;
+                : MobileARFaceTrackingRunner.TrackingSource.Disabled;
         }
-
-        if (headTracker != null)
-        {
-            headTracker.useFaceTrackingPosition = useFaceMode;
-            headTracker.useFixedPositionWhenFaceMissing = fixedSubtitleFallbackWhenFaceMissing;
-        }
-
-        if (speechToTextManager != null)
-            speechToTextManager.useFaceTrackingSubtitle = useFaceMode;
 
         if (cameraManager != null)
-            cameraManager.requestedFacingDirection = useFaceMode ? CameraFacingDirection.User : CameraFacingDirection.World;
+            cameraManager.requestedFacingDirection = useFrontFaceMode ? CameraFacingDirection.User : CameraFacingDirection.World;
 
         if (restartSessionOnModeChange && arSession != null)
         {
@@ -145,7 +158,6 @@ public class MobileARModeController : MonoBehaviour
             arSession.enabled = true;
         }
 
-        Debug.Log($"{LogTag} switched to {mode}.", this);
         RefreshStatus();
         switchRoutine = null;
     }
@@ -213,11 +225,11 @@ public class MobileARModeController : MonoBehaviour
         if (faceTrackingRunner == null)
             faceTrackingRunner = FindFirstObjectByType<MobileARFaceTrackingRunner>(FindObjectsInactive.Include);
 
-        if (headTracker == null)
-            headTracker = FindFirstObjectByType<MobileARHeadTracker>(FindObjectsInactive.Include);
+        if (backFacePositionProvider == null)
+            backFacePositionProvider = FindFirstObjectByType<BackCameraFacePositionProvider>(FindObjectsInactive.Include);
 
-        if (speechToTextManager == null)
-            speechToTextManager = FindFirstObjectByType<SpeechToTextManager>(FindObjectsInactive.Include);
+        if (backFacePositionProvider == null && cameraManager != null)
+            backFacePositionProvider = cameraManager.gameObject.AddComponent<BackCameraFacePositionProvider>();
 
         if (statusText == null)
             statusText = FindStatusText();
@@ -225,24 +237,18 @@ public class MobileARModeController : MonoBehaviour
 
     private void RefreshStatus()
     {
-        string requestedFacing = cameraManager != null ? cameraManager.requestedFacingDirection.ToString() : "None";
-        string currentFacing = cameraManager != null ? cameraManager.currentFacingDirection.ToString() : "None";
-        bool faceAssigned = faceManager != null;
-        bool faceEnabled = faceManager != null && faceManager.enabled;
-        int faceCount = faceTrackingRunner != null ? faceTrackingRunner.FaceTrackableCount : 0;
-        bool realFace = faceTrackingRunner != null && faceTrackingRunner.HasRealFaceTracking;
-        string subtitlePlacement = speechToTextManager != null && speechToTextManager.useFaceTrackingSubtitle ? "Face" : "Fixed";
-
-        string message =
-            $"Mode: {currentMode}\n" +
-            $"Camera: requested {requestedFacing}, current {currentFacing}\n" +
-            $"FaceManager: assigned {YesNo(faceAssigned)}, enabled {YesNo(faceEnabled)}, faces {faceCount}, real {YesNo(realFace)}\n" +
-            $"Subtitle: {subtitlePlacement}";
+        IFacePositionProvider provider = GetActiveFaceProvider();
+        bool hasFace = provider != null && provider.HasFace;
+        string message = hasFace ? "DETECTED" : "NOT DETECTED";
 
         if (statusText != null)
+        {
             statusText.text = message;
+            statusText.color = hasFace ? Color.green : Color.red;
+        }
 
-        Debug.Log($"{LogTag} {message.Replace('\n', ' ')}", this);
+        LogBackCameraFaceAudit(message);
+        LogProviderFaceUIStatus(provider, message);
     }
 
     private static TMP_Text FindStatusText()
@@ -263,9 +269,79 @@ public class MobileARModeController : MonoBehaviour
             behaviour.enabled = enabled;
     }
 
-    private static string YesNo(bool value)
+    private void LogBackCameraFaceAudit(string statusTextValue)
     {
-        return value ? "yes" : "no";
+        IFacePositionProvider provider = GetActiveFaceProvider();
+        string requestedFacing = cameraManager != null ? cameraManager.requestedFacingDirection.ToString() : "No ARCameraManager";
+        string currentFacing = cameraManager != null ? cameraManager.currentFacingDirection.ToString() : "No ARCameraManager";
+        bool faceSubsystemPresent = faceManager != null && faceManager.subsystem != null;
+        bool faceSubsystemRunning = faceSubsystemPresent && faceManager.subsystem.running;
+        int faceCount = CountFaceTrackables();
+        bool hasRealFaceTracking = faceTrackingRunner != null && faceTrackingRunner.HasRealFaceTracking;
+        bool hasProviderFace = provider != null && provider.HasFace;
+        string state =
+            $"requestedFacingDirection={requestedFacing} " +
+            $"currentFacingDirection={currentFacing} " +
+            $"activeProvider={(provider != null ? provider.SourceName : "None")} " +
+            $"ARSession.state={ARSession.state} " +
+            $"ARSession.notTrackingReason={ARSession.notTrackingReason} " +
+            $"ARFaceManager.enabled={(faceManager != null && faceManager.enabled)} " +
+            $"ARFaceManager.subsystemPresent={faceSubsystemPresent} " +
+            $"ARFaceManager.subsystemRunning={faceSubsystemRunning} " +
+            $"ARFaceManager.trackables.count={faceCount} " +
+            $"HasRealFaceTracking={hasRealFaceTracking} " +
+            $"provider.HasFace={hasProviderFace} " +
+            $"provider.NormalizedFaceCenter={(provider != null ? provider.NormalizedFaceCenter : Vector2.zero)} " +
+            $"provider.NormalizedFaceRect={(provider != null ? provider.NormalizedFaceRect : new Rect(0f, 0f, 0f, 0f))} " +
+            $"statusText={statusTextValue}";
+
+        if (state == lastBackCameraFaceAuditState)
+            return;
+
+        lastBackCameraFaceAuditState = state;
+        Debug.Log($"[BackCameraFaceAudit] {state}", this);
+
+        if (currentFacing == CameraFacingDirection.World.ToString() && faceManager != null && faceManager.enabled)
+            Debug.LogWarning("[BackCameraFaceAudit] ARCore ARFaceManager/Augmented Faces is expected to work with the User/front camera, not World/back camera.", this);
+    }
+
+    private IFacePositionProvider GetActiveFaceProvider()
+    {
+        if (currentMode == MobileTrackingMode.BackFace2D)
+            return backFacePositionProvider;
+
+        if (currentMode == MobileTrackingMode.FaceSubtitle || currentMode == MobileTrackingMode.FrontFaceAR)
+            return faceTrackingRunner;
+
+        return null;
+    }
+
+    private void LogProviderFaceUIStatus(IFacePositionProvider provider, string statusTextValue)
+    {
+        string state =
+            $"provider={(provider != null ? provider.SourceName : "None")} " +
+            $"hasFace={(provider != null && provider.HasFace)} " +
+            $"normalizedCenter={(provider != null ? provider.NormalizedFaceCenter : Vector2.zero)} " +
+            $"normalizedRect={(provider != null ? provider.NormalizedFaceRect : new Rect(0f, 0f, 0f, 0f))} " +
+            $"statusText={statusTextValue}";
+
+        if (state == lastProviderFaceUIStatus)
+            return;
+
+        lastProviderFaceUIStatus = state;
+        Debug.Log($"[FaceUIStatus] {state}", this);
+    }
+
+    private int CountFaceTrackables()
+    {
+        if (faceManager == null || faceManager.subsystem == null || !faceManager.subsystem.running)
+            return 0;
+
+        int count = 0;
+        foreach (ARFace face in faceManager.trackables)
+            count++;
+
+        return count;
     }
 
     private void OnDestroy()

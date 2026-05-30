@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.XR.ARFoundation;
+using UnityEngine.XR.ARSubsystems;
 
 #if UNITY_ANDROID
 using UnityEngine.Android;
@@ -121,12 +123,8 @@ public class MobileCamFeed : MonoBehaviour
     {
         if (display == null)
         {
-            ARCameraConfigSwitcher configSwitcher = FindFirstObjectByType<ARCameraConfigSwitcher>(FindObjectsInactive.Include);
-            if (configSwitcher != null)
-            {
-                configSwitcher.NextCameraConfig();
+            if (ToggleARCameraFacing())
                 return;
-            }
         }
 
         if (cameraDevices.Count == 0)
@@ -141,6 +139,34 @@ public class MobileCamFeed : MonoBehaviour
 
         currentCameraIndex = (currentCameraIndex + 1) % cameraDevices.Count;
         StartCamera(cameraDevices[currentCameraIndex].name);
+    }
+
+    private bool ToggleARCameraFacing()
+    {
+        ARCameraManager arCameraManager = FindFirstObjectByType<ARCameraManager>(FindObjectsInactive.Include);
+        if (arCameraManager == null)
+            return false;
+
+        CameraFacingDirection currentFacing = arCameraManager.requestedFacingDirection;
+        if (currentFacing == CameraFacingDirection.None)
+            currentFacing = arCameraManager.currentFacingDirection;
+
+        bool useSelfie = currentFacing != CameraFacingDirection.User;
+        arCameraManager.requestedFacingDirection = useSelfie
+            ? CameraFacingDirection.User
+            : CameraFacingDirection.World;
+
+        MobileARModeController modeController = FindFirstObjectByType<MobileARModeController>(FindObjectsInactive.Include);
+        if (modeController != null)
+        {
+            if (useSelfie)
+                modeController.SetFrontFaceARMode();
+            else
+                modeController.SetBackFace2DMode();
+        }
+
+        SetButtonText(useSelfie ? "Selfie" : "Front");
+        return true;
     }
 
     public void StopCamera()

@@ -106,12 +106,6 @@ public class MobileSceneAutoBinder : MonoBehaviour
             if (modeController.faceTrackingRunner == null)
                 modeController.faceTrackingRunner = faceRunner;
 
-            if (modeController.headTracker == null)
-                modeController.headTracker = headTracker;
-
-            if (modeController.speechToTextManager == null)
-                modeController.speechToTextManager = speechManager;
-
             if (modeController.statusText == null)
                 modeController.statusText = statusText;
         }

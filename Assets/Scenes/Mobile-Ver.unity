@@ -611,7 +611,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 463198394}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 9301bfa6e296c3141aef4fcd87b2c7b3, type: 3}
   m_Name: 
@@ -1093,7 +1093,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 937679129}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: c8c2c8f017da4e568b0d4cbd35a09f1d, type: 3}
   m_Name: 
@@ -1117,7 +1117,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 937679129}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 3895e14e0208ea54693963b4347ec8fe, type: 3}
   m_Name: 
@@ -1155,10 +1155,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b6c2f5c67d6d4e87a26fb94495adf1f1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MobileARFaceTrackingRunner
-  trackingSource: 1
+  trackingSource: 3
   trackingCamera: {fileID: 154705328}
   faceManager: {fileID: 1528904940}
-  fallbackWhenARFaceMissing: 1
+  fallbackWhenARFaceMissing: 0
   fallbackX: 0.5
   fallbackTopY: 0.35
   fallbackWidth: 0.28
@@ -1172,7 +1172,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 937679129}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 09238e6a2374dbf42924085b5708e51e, type: 3}
   m_Name: 
@@ -1195,7 +1195,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 937679129}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: ade899f2491c3374189035130043ec37, type: 3}
   m_Name: 
@@ -1248,11 +1248,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7e30db3eeac94ce590dcc3ffb3a8e8a9, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MobileARModeController
-  startupMode: 0
+  startupMode: 2
   applyStartupModeOnStart: 1
   restartSessionOnModeChange: 1
   sessionResetDelaySeconds: 0.15
-  fixedSubtitleFallbackWhenFaceMissing: 1
+  fixedSubtitleFallbackWhenFaceMissing: 0
   facePrefab: {fileID: 100000, guid: 20f222035a74441ba55a710a3607d5fd, type: 3}
   arSession: {fileID: 604475847}
   xrOrigin: {fileID: 1528904938}
@@ -1262,8 +1262,8 @@ MonoBehaviour:
   raycastManager: {fileID: 1528904935}
   handLandmarkerRunner: {fileID: 937679139}
   faceTrackingRunner: {fileID: 937679135}
-  headTracker: {fileID: 937679131}
-  speechToTextManager: {fileID: 937679133}
+  headTracker: {fileID: 0}
+  speechToTextManager: {fileID: 0}
   statusText: {fileID: 2111943446}
   showDebugStatus: 1
   statusRefreshSeconds: 0.5
@@ -1362,7 +1362,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1348300140}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 48144405d51b403479f50d88e41a6970, type: 3}
   m_Name: 
@@ -2056,7 +2056,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!224 &2111943445
 RectTransform:
   m_ObjectHideFlags: 0
@@ -2073,7 +2073,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: -61.6}
+  m_AnchoredPosition: {x: -423, y: 611}
   m_SizeDelta: {x: 200, y: 50}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &2111943446

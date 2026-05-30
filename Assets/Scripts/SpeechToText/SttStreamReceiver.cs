@@ -18,6 +18,7 @@ public class SttStreamReceiver : MonoBehaviour
             return;
         }
 
+        Debug.Log($"[STTAudit] receiver partial -> subtitleController={subtitleController.name}: {text}", this);
         subtitleController.ReceivePartialText(text);
     }
 
@@ -29,6 +30,7 @@ public class SttStreamReceiver : MonoBehaviour
             return;
         }
 
+        Debug.Log($"[STTAudit] receiver final -> subtitleController={subtitleController.name}: {text}", this);
         subtitleController.ReceiveFinalText(text);
     }
 
@@ -43,6 +45,8 @@ public class SttStreamReceiver : MonoBehaviour
 
         if (string.IsNullOrEmpty(token))
             return;
+
+        Debug.Log($"[STTAudit] receiver token: {token}", this);
 
         if (token == "\\n" || token == "\n")
         {
