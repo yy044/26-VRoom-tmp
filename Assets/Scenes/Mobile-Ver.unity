@@ -752,6 +752,7 @@ GameObject:
   - component: {fileID: 614402869}
   - component: {fileID: 614402868}
   - component: {fileID: 614402867}
+  - component: {fileID: 614402870}
   m_Layer: 5
   m_Name: HeadLabel
   m_TagString: Untagged
@@ -894,6 +895,39 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 614402865}
   m_CullTransparentMesh: 1
+--- !u!114 &614402870
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 614402865}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1ac55184fe534806906f42b9064455d8, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  target: {fileID: 614402866}
+  faceProviderBehaviour: {fileID: 937679141}
+  useCenterWhenNoFace: 1
+  centerFallbackAnchor: {x: 0.5, y: 0.5}
+  fallbackCenterOffsetNormalized: {x: 0, y: 0.12}
+  useBoundsTopAnchor: 1
+  baseBoundsPaddingNormalized: 0.02
+  boundsHeightPaddingMultiplier: 0.15
+  smoothBoundsAnchor: 1
+  boundsAnchorSmoothTime: 0.06
+  screenPaddingNormalized: {x: 0.05, y: 0.08}
+  smoothTime: 0.08
+  mirrorX: 1
+  invertY: 1
+  swapXY: 0
+  rotate90Clockwise: 0
+  rotate90CounterClockwise: 0
+  debugLogs: 0
+  currentFaceHeight: 0
+  currentAdaptivePadding: 0
+  currentAnchorPosition: {x: 0, y: 0}
 --- !u!1 &705507993
 GameObject:
   m_ObjectHideFlags: 0
@@ -1090,6 +1124,8 @@ GameObject:
   - component: {fileID: 937679138}
   - component: {fileID: 937679139}
   - component: {fileID: 937679140}
+  - component: {fileID: 937679141}
+  - component: {fileID: 937679142}
   m_Layer: 0
   m_Name: AppManager
   m_TagString: Untagged
@@ -1154,8 +1190,6 @@ MonoBehaviour:
   sttStreamReceiver: {fileID: 463198396}
   providerType: 1
   whisperServerUrl: wss://ey55616--vroom-realtime-stt-fastapi-app.modal.run/ws/stt
-  useFaceTrackingSubtitle: 1
-  fixedSubtitlePosition: {x: 0, y: -260}
   visibleSeconds: 3
   fadeSeconds: 0.35
   maxCharacters: 200
@@ -1296,6 +1330,74 @@ MonoBehaviour:
   statusText: {fileID: 2111943446}
   showDebugStatus: 1
   statusRefreshSeconds: 0.5
+--- !u!114 &937679141
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 937679129}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9d2d7c7b50ab4e54c990b9761fa7d00b, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  modeController: {fileID: 937679140}
+  frontProviderBehaviour: {fileID: 937679135}
+  backProviderBehaviour: {fileID: 154705329}
+  autoBindOnAwake: 1
+--- !u!114 &937679142
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 937679129}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7a0d292142504ac7b2fc810f3806303b, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  faceProviderBehaviour: {fileID: 937679141}
+  subtitleTarget: {fileID: 614402866}
+  showFaceCenter: 1
+  showSubtitleTarget: 1
+  showBoundingBox: 1
+  showConnectionLine: 1
+  showBoundsTopCenter: 1
+  showBoundsAnchor: 1
+  showAdaptivePadding: 1
+  showFallbackOffsetAnchor: 1
+  showCenterFallbackWhenNoFace: 1
+  autoHideWhenNoFace: 1
+  useBoundsTopAnchor: 1
+  baseBoundsPaddingNormalized: 0.02
+  boundsHeightPaddingMultiplier: 0.15
+  fallbackCenterOffsetNormalized: {x: 0, y: 0.12}
+  mirrorX: 1
+  invertY: 1
+  swapXY: 0
+  rotate90Clockwise: 0
+  rotate90CounterClockwise: 0
+  faceCenterColor: {r: 0, g: 1, b: 0.2, a: 0.9}
+  subtitleTargetColor: {r: 1, g: 0.85, b: 0, a: 0.9}
+  boundingBoxColor: {r: 0, g: 0.75, b: 1, a: 0.9}
+  connectionLineColor: {r: 1, g: 1, b: 1, a: 0.65}
+  boundsTopCenterColor: {r: 0.35, g: 1, b: 1, a: 0.9}
+  boundsAnchorColor: {r: 1, g: 0.45, b: 0, a: 0.95}
+  adaptivePaddingColor: {r: 1, g: 0.55, b: 0, a: 0.85}
+  fallbackOffsetAnchorColor: {r: 1, g: 0, b: 1, a: 0.85}
+  fallbackCenterColor: {r: 1, g: 0.25, b: 0.25, a: 0.8}
+  faceCenterSize: {x: 18, y: 18}
+  subtitleTargetSize: {x: 22, y: 22}
+  boundsTopCenterSize: {x: 12, y: 12}
+  boundsAnchorSize: {x: 16, y: 16}
+  fallbackOffsetAnchorSize: {x: 14, y: 14}
+  fallbackCenterSize: {x: 14, y: 14}
+  boundingBoxThickness: 3
+  connectionLineThickness: 2
+  adaptivePaddingLineThickness: 2
+  debugLogs: 0
 --- !u!1 &1140573822
 GameObject:
   m_ObjectHideFlags: 0

@@ -305,6 +305,11 @@ public class BackCameraFacePositionProvider : MonoBehaviour, IFacePositionProvid
         LogModelAudit(inferenceRan, faceCount);
     }
 
+    private void OnDisable()
+    {
+        ClearFace();
+    }
+
     private bool TryUpdateInputTexture(XRCpuImage cpuImage)
     {
         int width = cpuImage.width;

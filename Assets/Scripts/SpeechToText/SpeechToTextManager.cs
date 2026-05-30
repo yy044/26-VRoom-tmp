@@ -20,8 +20,6 @@ public class SpeechToTextManager : MonoBehaviour
     public string whisperServerUrl = "ws://127.0.0.1:8000/ws/stt";
 
     [Header("Subtitle Display")]
-    public bool useFaceTrackingSubtitle = true;
-    public Vector2 fixedSubtitlePosition = new Vector2(0f, -260f);
     public float visibleSeconds = 3f;
     public float fadeSeconds = 1f;
     public int maxCharacters = 90;
@@ -29,10 +27,8 @@ public class SpeechToTextManager : MonoBehaviour
     private readonly ConcurrentQueue<SpeechTextEvent> pendingTextEvents = new ConcurrentQueue<SpeechTextEvent>();
     private ISpeechToTextProvider provider;
     private ISpeechToTextTickProvider tickProvider;
-    private MobileARHeadTracker mobileHeadTracker;
     private float lastTextTime = -999f;
     private Color originalColor = Color.white;
-    private string lastPlacementAuditState;
 
     private void Awake()
     {
@@ -42,7 +38,6 @@ public class SpeechToTextManager : MonoBehaviour
     private void Start()
     {
         AutoBind();
-        ApplySubtitlePlacement();
 
         if (headLabelText != null)
             originalColor = headLabelText.color;
@@ -62,7 +57,6 @@ public class SpeechToTextManager : MonoBehaviour
 
     private void Update()
     {
-        ApplySubtitlePlacement();
         tickProvider?.Tick();
         FlushPendingTextEvents();
 
@@ -199,51 +193,17 @@ public class SpeechToTextManager : MonoBehaviour
 
     private void AutoBind()
     {
-        if (mobileHeadTracker == null)
-            mobileHeadTracker = FindFirstObjectByType<MobileARHeadTracker>(FindObjectsInactive.Include);
-
         if (headLabelText != null)
             return;
-
-        if (mobileHeadTracker != null && mobileHeadTracker.headLabelText != null)
-        {
-            headLabelText = mobileHeadTracker.headLabelText;
-            return;
-        }
-
-        HeadTracker headTracker = FindFirstObjectByType<HeadTracker>(FindObjectsInactive.Include);
-        if (headTracker != null && headTracker.headLabelText != null)
-        {
-            headLabelText = headTracker.headLabelText;
-            return;
-        }
 
         TextMeshProUGUI[] texts = FindObjectsByType<TextMeshProUGUI>(FindObjectsInactive.Include, FindObjectsSortMode.None);
         foreach (TextMeshProUGUI text in texts)
         {
-            if (text.name.Contains("Head") || text.name.Contains("Subtitle"))
+            if (text.name.Contains("HeadLabel") || text.transform.parent != null && text.transform.parent.name.Contains("HeadLabel"))
             {
                 headLabelText = text;
                 return;
             }
-        }
-    }
-
-    private void ApplySubtitlePlacement()
-    {
-        if (mobileHeadTracker == null)
-            mobileHeadTracker = FindFirstObjectByType<MobileARHeadTracker>(FindObjectsInactive.Include);
-
-        if (mobileHeadTracker == null)
-            return;
-
-        mobileHeadTracker.useFaceTrackingPosition = useFaceTrackingSubtitle;
-        mobileHeadTracker.fixedAnchoredPosition = fixedSubtitlePosition;
-        string placementState = $"useFaceTracking={useFaceTrackingSubtitle}, fixed={fixedSubtitlePosition}";
-        if (placementState != lastPlacementAuditState)
-        {
-            lastPlacementAuditState = placementState;
-            Debug.Log($"[SubtitlePositionAudit] SpeechToTextManager placement settings applied: {placementState}", this);
         }
     }
 

@@ -37,6 +37,14 @@ public class MobileARFaceTrackingRunner : MonoBehaviour, IFacePositionProvider
             hasDetection = true;
             this.isFallback = isFallback;
         }
+
+        public MobileFaceDetection(Vector2 normalizedCenter, Rect normalizedRect, bool isFallback = false)
+        {
+            this.normalizedRect = normalizedRect;
+            this.normalizedCenter = normalizedCenter;
+            hasDetection = true;
+            this.isFallback = isFallback;
+        }
     }
 
     [Header("Tracking")]
@@ -94,6 +102,9 @@ public class MobileARFaceTrackingRunner : MonoBehaviour, IFacePositionProvider
     private void OnDisable()
     {
         ARSession.stateChanged -= OnARSessionStateChanged;
+        hasLatestDetection = false;
+        HasRealFaceTracking = false;
+        FaceTrackableCount = 0;
     }
 
     private void Update()
@@ -203,10 +214,17 @@ public class MobileARFaceTrackingRunner : MonoBehaviour, IFacePositionProvider
                 return;
             }
 
-            SetNormalizedTarget(new Vector2(
+            Vector2 normalizedCenter = new Vector2(
                 Mathf.Clamp01(screenPosition.x / ImageWidth),
                 Mathf.Clamp01(1f - screenPosition.y / ImageHeight)
-            ));
+            );
+
+            Rect normalizedBounds = TryGetProjectedFaceBounds(face, out Rect projectedBounds)
+                ? projectedBounds
+                : Rect.zero;
+
+            latestDetection = new MobileFaceDetection(normalizedCenter, normalizedBounds);
+            hasLatestDetection = true;
             HasRealFaceTracking = true;
             return;
         }
@@ -240,6 +258,42 @@ public class MobileARFaceTrackingRunner : MonoBehaviour, IFacePositionProvider
         }
 
         hasLatestDetection = false;
+    }
+
+    private bool TryGetProjectedFaceBounds(ARFace face, out Rect normalizedBounds)
+    {
+        normalizedBounds = Rect.zero;
+
+        if (face == null || trackingCamera == null || !face.vertices.IsCreated || face.vertices.Length == 0)
+            return false;
+
+        float minX = 1f;
+        float minY = 1f;
+        float maxX = 0f;
+        float maxY = 0f;
+        bool foundVisibleVertex = false;
+
+        for (int i = 0; i < face.vertices.Length; i++)
+        {
+            Vector3 worldPosition = face.transform.TransformPoint(face.vertices[i]);
+            Vector3 screenPosition = trackingCamera.WorldToScreenPoint(worldPosition);
+            if (screenPosition.z < 0f)
+                continue;
+
+            float x = Mathf.Clamp01(screenPosition.x / ImageWidth);
+            float y = Mathf.Clamp01(1f - screenPosition.y / ImageHeight);
+            minX = Mathf.Min(minX, x);
+            minY = Mathf.Min(minY, y);
+            maxX = Mathf.Max(maxX, x);
+            maxY = Mathf.Max(maxY, y);
+            foundVisibleVertex = true;
+        }
+
+        if (!foundVisibleVertex || maxX - minX <= 0.001f || maxY - minY <= 0.001f)
+            return false;
+
+        normalizedBounds = Rect.MinMaxRect(minX, minY, maxX, maxY);
+        return true;
     }
 
     private void WarnThrottled(string message)
