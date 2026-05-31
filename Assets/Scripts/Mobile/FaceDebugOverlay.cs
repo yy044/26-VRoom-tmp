@@ -10,6 +10,9 @@ public class FaceDebugOverlay : MonoBehaviour
     [Tooltip("Actual subtitle RectTransform to visualize.")]
     [SerializeField] private RectTransform subtitleTarget;
 
+    [Tooltip("Subtitle controller whose active follow settings are visualized.")]
+    [SerializeField] private FaceAnchoredSubtitleTarget subtitleTargetController;
+
     [Header("Visibility")]
     [SerializeField] private bool showFaceCenter = true;
     [SerializeField] private bool showSubtitleTarget = true;
@@ -20,24 +23,16 @@ public class FaceDebugOverlay : MonoBehaviour
     [SerializeField] private bool showAdaptivePadding = true;
     [SerializeField] private bool showFallbackOffsetAnchor = true;
     [SerializeField] private bool showCenterFallbackWhenNoFace = true;
+    [SerializeField] private bool showMovementStageMarkers = true;
     [SerializeField] private bool autoHideWhenNoFace = true;
-
-    [Header("Subtitle Anchor Preview")]
-    [Tooltip("Match FaceAnchoredSubtitleTarget.useBoundsTopAnchor.")]
-    [SerializeField] private bool useBoundsTopAnchor = true;
-
-    [Tooltip("Match FaceAnchoredSubtitleTarget.baseBoundsPaddingNormalized.")]
-    [SerializeField] private float baseBoundsPaddingNormalized = 0.02f;
-
-    [Tooltip("Match FaceAnchoredSubtitleTarget.boundsHeightPaddingMultiplier.")]
-    [SerializeField] private float boundsHeightPaddingMultiplier = 0.15f;
-
-    [Tooltip("Match FaceAnchoredSubtitleTarget.fallbackCenterOffsetNormalized.")]
-    [SerializeField] private Vector2 fallbackCenterOffsetNormalized = new Vector2(0f, 0.12f);
 
     [Header("Debug Colors")]
     [SerializeField] private Color faceCenterColor = new Color(0f, 1f, 0.2f, 0.9f);
     [SerializeField] private Color subtitleTargetColor = new Color(1f, 0.85f, 0f, 0.9f);
+    [SerializeField] private Color rawFaceTargetColor = new Color(1f, 0.15f, 0.15f, 0.95f);
+    [SerializeField] private Color smoothedFaceTargetColor = new Color(0.15f, 0.95f, 1f, 0.95f);
+    [SerializeField] private Color desiredSubtitlePositionColor = new Color(1f, 1f, 1f, 0.95f);
+    [SerializeField] private Color actualSubtitlePositionColor = new Color(0.2f, 1f, 0.35f, 0.95f);
     [SerializeField] private Color boundingBoxColor = new Color(0f, 0.75f, 1f, 0.9f);
     [SerializeField] private Color connectionLineColor = new Color(1f, 1f, 1f, 0.65f);
     [SerializeField] private Color boundsTopCenterColor = new Color(0.35f, 1f, 1f, 0.9f);
@@ -49,6 +44,7 @@ public class FaceDebugOverlay : MonoBehaviour
     [Header("Sizing")]
     [SerializeField] private Vector2 faceCenterSize = new Vector2(18f, 18f);
     [SerializeField] private Vector2 subtitleTargetSize = new Vector2(22f, 22f);
+    [SerializeField] private Vector2 movementStageMarkerSize = new Vector2(18f, 18f);
     [SerializeField] private Vector2 boundsTopCenterSize = new Vector2(12f, 12f);
     [SerializeField] private Vector2 boundsAnchorSize = new Vector2(16f, 16f);
     [SerializeField] private Vector2 fallbackOffsetAnchorSize = new Vector2(14f, 14f);
@@ -67,6 +63,10 @@ public class FaceDebugOverlay : MonoBehaviour
     private Canvas canvas;
     private Image faceCenterImage;
     private Image subtitleTargetImage;
+    private Image rawFaceTargetImage;
+    private Image smoothedFaceTargetImage;
+    private Image desiredSubtitlePositionImage;
+    private Image actualSubtitlePositionImage;
     private Image boundsTopCenterImage;
     private Image boundsAnchorImage;
     private Image adaptivePaddingLineImage;
@@ -90,8 +90,6 @@ public class FaceDebugOverlay : MonoBehaviour
         boundingBoxThickness = Mathf.Max(1f, boundingBoxThickness);
         connectionLineThickness = Mathf.Max(1f, connectionLineThickness);
         adaptivePaddingLineThickness = Mathf.Max(1f, adaptivePaddingLineThickness);
-        baseBoundsPaddingNormalized = Mathf.Max(0f, baseBoundsPaddingNormalized);
-        boundsHeightPaddingMultiplier = Mathf.Max(0f, boundsHeightPaddingMultiplier);
     }
 
     private void LateUpdate()
@@ -106,10 +104,15 @@ public class FaceDebugOverlay : MonoBehaviour
         coordinateRouter = faceProviderBehaviour as ActiveFacePositionProviderRouter;
         bool hasFace = faceProvider != null && faceProvider.HasFace;
         bool hasBounds = hasFace && HasBoundingBox(faceProvider.NormalizedFaceRect);
-        bool usingBoundsAnchor = hasBounds && useBoundsTopAnchor;
+        SubtitleFollowSettings followSettings = GetActiveFollowSettings();
+        bool usingBoundsAnchor = hasBounds && followSettings.UseTopOfFaceBox;
 
         SetVisible(faceCenterImage, showFaceCenter && hasFace);
         SetVisible(subtitleTargetImage, showSubtitleTarget && (hasFace || !autoHideWhenNoFace));
+        SetVisible(rawFaceTargetImage, showMovementStageMarkers && hasFace && subtitleTargetController != null);
+        SetVisible(smoothedFaceTargetImage, showMovementStageMarkers && hasFace && subtitleTargetController != null);
+        SetVisible(desiredSubtitlePositionImage, showMovementStageMarkers && subtitleTargetController != null && (hasFace || !autoHideWhenNoFace));
+        SetVisible(actualSubtitlePositionImage, showMovementStageMarkers && subtitleTarget != null && (hasFace || !autoHideWhenNoFace));
         SetVisible(connectionLineImage, showConnectionLine && hasFace && subtitleTarget != null);
         SetVisible(boundsTopCenterImage, showBoundsTopCenter && usingBoundsAnchor);
         SetVisible(boundsAnchorImage, showBoundsAnchor && usingBoundsAnchor);
@@ -130,6 +133,7 @@ public class FaceDebugOverlay : MonoBehaviour
                 out Vector2 boundsTopCenter,
                 out float adaptivePadding);
             PositionImage(faceCenterImage, faceCenter, faceCenterSize, faceCenterColor);
+            PositionMovementStageMarkers();
             PositionBoundingBox(faceProvider.NormalizedFaceRect);
 
             if (anchorMode == "bounds-top")
@@ -161,6 +165,7 @@ public class FaceDebugOverlay : MonoBehaviour
             {
                 Vector2 subtitlePosition = WorldToOverlayAnchoredPosition(subtitleTarget.TransformPoint(subtitleTarget.rect.center));
                 PositionImage(subtitleTargetImage, subtitlePosition, subtitleTargetSize, subtitleTargetColor);
+                PositionMovementStageMarkers();
             }
         }
 
@@ -178,6 +183,9 @@ public class FaceDebugOverlay : MonoBehaviour
             if (targetController != null)
                 subtitleTarget = targetController.GetComponent<RectTransform>();
         }
+
+        if (subtitleTargetController == null)
+            subtitleTargetController = FindFirstObjectByType<FaceAnchoredSubtitleTarget>(FindObjectsInactive.Include);
 
         if (subtitleTarget != null)
         {
@@ -205,6 +213,10 @@ public class FaceDebugOverlay : MonoBehaviour
 
         faceCenterImage = CreateImage("FaceCenter", overlayRoot);
         subtitleTargetImage = CreateImage("SubtitleTarget", overlayRoot);
+        rawFaceTargetImage = CreateImage("RawFaceTarget", overlayRoot);
+        smoothedFaceTargetImage = CreateImage("SmoothedFaceTarget", overlayRoot);
+        desiredSubtitlePositionImage = CreateImage("DesiredSubtitlePosition", overlayRoot);
+        actualSubtitlePositionImage = CreateImage("ActualSubtitlePosition", overlayRoot);
         boundsTopCenterImage = CreateImage("BoundsTopCenter", overlayRoot);
         boundsAnchorImage = CreateImage("BoundsTopAnchor", overlayRoot);
         adaptivePaddingLineImage = CreateImage("AdaptivePaddingLine", overlayRoot);
@@ -238,6 +250,10 @@ public class FaceDebugOverlay : MonoBehaviour
     {
         SetVisible(faceCenterImage, false);
         SetVisible(subtitleTargetImage, false);
+        SetVisible(rawFaceTargetImage, false);
+        SetVisible(smoothedFaceTargetImage, false);
+        SetVisible(desiredSubtitlePositionImage, false);
+        SetVisible(actualSubtitlePositionImage, false);
         SetVisible(boundsTopCenterImage, false);
         SetVisible(boundsAnchorImage, false);
         SetVisible(adaptivePaddingLineImage, false);
@@ -290,6 +306,37 @@ public class FaceDebugOverlay : MonoBehaviour
         PositionImage(boundingBoxEdges[3], new Vector2(max.x, center.y), new Vector2(boundingBoxThickness, height), boundingBoxColor);
     }
 
+    private void PositionMovementStageMarkers()
+    {
+        if (subtitleTargetController == null)
+            return;
+
+        PositionImage(
+            rawFaceTargetImage,
+            NormalizedToAnchoredPosition(subtitleTargetController.CurrentRawFaceTarget),
+            movementStageMarkerSize,
+            rawFaceTargetColor);
+        PositionImage(
+            smoothedFaceTargetImage,
+            NormalizedToAnchoredPosition(subtitleTargetController.CurrentSmoothedFaceAnchor),
+            movementStageMarkerSize * 0.8f,
+            smoothedFaceTargetColor);
+        PositionImage(
+            desiredSubtitlePositionImage,
+            WorldToOverlayAnchoredPosition(subtitleTargetController.CurrentDesiredSubtitleWorldCenter),
+            movementStageMarkerSize * 1.1f,
+            desiredSubtitlePositionColor);
+
+        if (subtitleTarget != null)
+        {
+            PositionImage(
+                actualSubtitlePositionImage,
+                WorldToOverlayAnchoredPosition(subtitleTarget.TransformPoint(subtitleTarget.rect.center)),
+                movementStageMarkerSize,
+                actualSubtitlePositionColor);
+        }
+    }
+
     private void LogOverlaySizeAudit(Rect transformedBounds, float width, float height, Vector2 center)
     {
         if (Time.unscaledTime < nextOverlayAuditLogTime)
@@ -316,10 +363,11 @@ public class FaceDebugOverlay : MonoBehaviour
         out float adaptivePadding)
     {
         Rect transformedBounds = TransformProviderRect(faceBounds);
-        if (useBoundsTopAnchor && HasBoundingBox(transformedBounds))
+        SubtitleFollowSettings followSettings = GetActiveFollowSettings();
+        if (followSettings.UseTopOfFaceBox && HasBoundingBox(transformedBounds))
         {
             anchorMode = "bounds-top";
-            adaptivePadding = baseBoundsPaddingNormalized + (transformedBounds.height * boundsHeightPaddingMultiplier);
+            adaptivePadding = followSettings.ExtraGapAboveFace + (transformedBounds.height * followSettings.FaceBoxHeightGapMultiplier);
             boundsTopCenter = new Vector2(transformedBounds.center.x, transformedBounds.yMax);
             return boundsTopCenter + new Vector2(0f, adaptivePadding);
         }
@@ -327,7 +375,7 @@ public class FaceDebugOverlay : MonoBehaviour
         anchorMode = "center-offset";
         adaptivePadding = 0f;
         boundsTopCenter = Vector2.zero;
-        return TransformProviderPoint(faceCenter) + fallbackCenterOffsetNormalized;
+        return TransformProviderPoint(faceCenter) + followSettings.CenterOffsetWhenNoFace;
     }
 
     private void PositionLine(Image image, Vector2 start, Vector2 end, Color color)
@@ -395,6 +443,20 @@ public class FaceDebugOverlay : MonoBehaviour
             : CameraModeMappingProfile.CreateFrontARDefault();
     }
 
+    private SubtitleFollowSettings GetActiveFollowSettings()
+    {
+        return subtitleTargetController != null
+            ? subtitleTargetController.ActiveFollowSettings
+            : SubtitleFollowSettings.FrontDefaults();
+    }
+
+    private string GetActiveFollowSettingsName()
+    {
+        return subtitleTargetController != null
+            ? subtitleTargetController.ActiveFollowSettingsName
+            : "Front Camera Follow Settings";
+    }
+
     private void LogRectAdjustment(CameraModeMappingProfile profile)
     {
         if (loggedRectAdjustment)
@@ -451,16 +513,28 @@ public class FaceDebugOverlay : MonoBehaviour
         Rect rect = faceProvider != null ? faceProvider.NormalizedFaceRect : Rect.zero;
         Rect transformedRect = faceProvider != null ? TransformProviderRect(rect) : Rect.zero;
         bool boundsValid = HasBoundingBox(rect);
+        SubtitleFollowSettings followSettings = GetActiveFollowSettings();
         float faceHeight = transformedRect.height;
-        float adaptivePadding = faceHeight > 0.001f ? baseBoundsPaddingNormalized + (faceHeight * boundsHeightPaddingMultiplier) : 0f;
+        float adaptivePadding = faceHeight > 0.001f ? followSettings.ExtraGapAboveFace + (faceHeight * followSettings.FaceBoxHeightGapMultiplier) : 0f;
+        Vector2 rawFaceTarget = subtitleTargetController != null ? subtitleTargetController.CurrentRawFaceTarget : Vector2.zero;
+        Vector2 smoothedFaceAnchor = subtitleTargetController != null ? subtitleTargetController.CurrentSmoothedFaceAnchor : Vector2.zero;
+        Vector2 desiredSubtitlePosition = subtitleTargetController != null ? subtitleTargetController.CurrentDesiredAnchoredPosition : Vector2.zero;
+        Vector2 actualSubtitlePosition = subtitleTargetController != null ? subtitleTargetController.CurrentActualAnchoredPosition : Vector2.zero;
+        float uiVelocityMagnitude = subtitleTargetController != null ? subtitleTargetController.CurrentUiVelocityMagnitude : 0f;
+        float faceAnchorVelocityMagnitude = subtitleTargetController != null ? subtitleTargetController.CurrentFaceAnchorVelocityMagnitude : 0f;
+        bool positionWasClamped = subtitleTargetController != null && subtitleTargetController.CurrentPositionWasClamped;
         string state =
-            $"activeMode={activeMode} provider={providerSource} routerProvider={routerProvider} usingRouterSettings={(coordinateRouter != null)} transform={transformSettings} hasFace={hasFace} boundsValid={boundsValid} " +
+            $"activeMode={activeMode} followSettings={GetActiveFollowSettingsName()} faceTrackingSmoothTime={followSettings.FaceTrackingSmoothTime:0.###} subtitleMovementSmoothTime={followSettings.SubtitleMovementSmoothTime:0.###} faceBoxHeightGapMultiplier={followSettings.FaceBoxHeightGapMultiplier:0.###} " +
+            $"provider={providerSource} routerProvider={routerProvider} usingRouterSettings={(coordinateRouter != null)} transform={transformSettings} hasFace={hasFace} boundsValid={boundsValid} " +
             $"rawCenter={center} rawCenter.x={center.x:0.000} transformedCenter={transformedCenter} transformedCenter.x={transformedCenter.x:0.000} " +
             $"rawBounds.center.x={rect.center.x:0.000} transformedBounds.center.x={transformedRect.center.x:0.000} " +
             $"rawBounds=min({rect.xMin:0.000},{rect.yMin:0.000}) max({rect.xMax:0.000},{rect.yMax:0.000}) size({rect.width:0.000},{rect.height:0.000}) " +
             $"transformedBounds=min({transformedRect.xMin:0.000},{transformedRect.yMin:0.000}) max({transformedRect.xMax:0.000},{transformedRect.yMax:0.000}) size({transformedRect.width:0.000},{transformedRect.height:0.000}) " +
-            $"faceHeight={faceHeight:0.000} adaptivePadding={adaptivePadding:0.000} useBoundsTopAnchor={useBoundsTopAnchor} " +
-            $"basePadding={baseBoundsPaddingNormalized} heightPaddingMultiplier={boundsHeightPaddingMultiplier} fallbackOffset={fallbackCenterOffsetNormalized} subtitleTarget={targetName}";
+            $"rawFaceTarget={rawFaceTarget} smoothedFaceAnchor={smoothedFaceAnchor} " +
+            $"desiredSubtitlePosition={desiredSubtitlePosition} actualSubtitlePosition={actualSubtitlePosition} " +
+            $"uiVelocityMagnitude={uiVelocityMagnitude:0.###} faceAnchorVelocityMagnitude={faceAnchorVelocityMagnitude:0.###} clamped={positionWasClamped} " +
+            $"faceHeight={faceHeight:0.000} adaptivePadding={adaptivePadding:0.000} useTopOfFaceBox={followSettings.UseTopOfFaceBox} " +
+            $"extraGapAboveFace={followSettings.ExtraGapAboveFace} heightGapMultiplier={followSettings.FaceBoxHeightGapMultiplier} centerOffset={followSettings.CenterOffsetWhenNoFace} subtitleTarget={targetName}";
         if (state == lastLogState)
             return;
 
