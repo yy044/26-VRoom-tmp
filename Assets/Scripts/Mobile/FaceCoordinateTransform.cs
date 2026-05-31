@@ -33,7 +33,7 @@ public struct FaceCoordinateTransformSettings
 
     public static FaceCoordinateTransformSettings Back2DDefault =>
         new FaceCoordinateTransformSettings(
-            mirrorX: false,
+            mirrorX: true,
             invertY: true,
             swapXY: false,
             rotate90Clockwise: false,
