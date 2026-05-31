@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 public class ActiveFacePositionProviderRouter : MonoBehaviour, IFacePositionProvider
@@ -23,25 +24,36 @@ public class ActiveFacePositionProviderRouter : MonoBehaviour, IFacePositionProv
     [Tooltip("Legacy Back 2D transform retained for old serialized scenes. Runtime uses Back 2D Profile / Face Coordinate Transform.")]
     [SerializeField] private FaceCoordinateTransformSettings back2DTransform = FaceCoordinateTransformSettings.Back2DDefault;
 
+    [Header("Person Tracking")]
+    [SerializeField] private PersonFaceTrackManager personTrackManager;
+
     [Header("Fallback")]
     [Tooltip("If enabled, missing serialized references are found in the scene on Awake.")]
     [SerializeField] private bool autoBindOnAwake = true;
 
     private IFacePositionProvider frontProvider;
     private IFacePositionProvider backProvider;
+    private readonly List<FaceTrackCandidate> singleFaceFallbackCandidates = new();
     private MobileARModeController.MobileTrackingMode lastMode;
     private bool hasLastMode;
     private string lastCoordinateMappingState;
     private string lastActivePathState;
     private bool loggedBack2DProfile;
 
-    public bool HasFace => ActiveProvider != null && IsActiveProviderEnabled() && ActiveProvider.HasFace;
-    public Vector2 NormalizedFaceCenter => HasFace ? ActiveProvider.NormalizedFaceCenter : Vector2.zero;
-    public Rect NormalizedFaceRect => HasFace ? ActiveProvider.NormalizedFaceRect : Rect.zero;
+    public bool HasFace => personTrackManager != null ? personTrackManager.HasPrimaryPersonTrack : ActiveProvider != null && IsActiveProviderEnabled() && ActiveProvider.HasFace;
+    public Vector2 NormalizedFaceCenter => HasFace
+        ? (personTrackManager != null && personTrackManager.HasPrimaryPersonTrack ? personTrackManager.PrimaryPersonTrack.NormalizedCenter : ActiveProvider.NormalizedFaceCenter)
+        : Vector2.zero;
+    public Rect NormalizedFaceRect => HasFace
+        ? (personTrackManager != null && personTrackManager.HasPrimaryPersonTrack ? personTrackManager.PrimaryPersonTrack.NormalizedBounds : ActiveProvider.NormalizedFaceRect)
+        : Rect.zero;
     public string SourceName => ActiveProvider != null && IsActiveProviderEnabled() ? ActiveProvider.SourceName : "No Active Face Provider";
     public MobileARModeController.MobileTrackingMode CurrentMode => modeController != null ? modeController.CurrentMode : MobileARModeController.MobileTrackingMode.FaceSubtitle;
     public FaceCoordinateTransformSettings CurrentTransformSettings => IsBackProviderActive() ? back2DProfile.faceCoordinateTransform : frontARTransform;
     public CameraModeMappingProfile Back2DProfile => back2DProfile;
+    public IReadOnlyList<PersonFaceTrack> ActivePersonTracks => personTrackManager != null ? personTrackManager.ActiveTracks : System.Array.Empty<PersonFaceTrack>();
+    public bool HasPrimaryPersonTrack => personTrackManager != null && personTrackManager.HasPrimaryPersonTrack;
+    public PersonFaceTrack PrimaryPersonTrack => personTrackManager != null ? personTrackManager.PrimaryPersonTrack : default;
     public string CurrentProviderName
     {
         get
@@ -81,6 +93,7 @@ public class ActiveFacePositionProviderRouter : MonoBehaviour, IFacePositionProv
             AutoBind();
 
         ResolveProviders();
+        UpdatePersonTracks();
         LogBack2DProfile();
         TrackModeChange();
     }
@@ -88,6 +101,7 @@ public class ActiveFacePositionProviderRouter : MonoBehaviour, IFacePositionProv
     private void Update()
     {
         TrackModeChange();
+        UpdatePersonTracks();
         LogActivePath("Update");
         LogCoordinateMapping();
     }
@@ -107,12 +121,27 @@ public class ActiveFacePositionProviderRouter : MonoBehaviour, IFacePositionProv
 
         if (backProviderBehaviour == null)
             backProviderBehaviour = FindFirstObjectByType<BackCameraFacePositionProvider>(FindObjectsInactive.Include);
+
+        if (personTrackManager == null)
+            personTrackManager = GetComponent<PersonFaceTrackManager>();
+
+        if (personTrackManager == null)
+            personTrackManager = FindFirstObjectByType<PersonFaceTrackManager>(FindObjectsInactive.Include);
     }
 
     private void ResolveProviders()
     {
         frontProvider = frontProviderBehaviour as IFacePositionProvider;
         backProvider = backProviderBehaviour as IFacePositionProvider;
+    }
+
+    public bool TryGetPersonTrack(int personId, out PersonFaceTrack track)
+    {
+        if (personTrackManager != null)
+            return personTrackManager.TryGetPersonTrack(personId, out track);
+
+        track = default;
+        return false;
     }
 
     private bool IsActiveProviderEnabled()
@@ -167,8 +196,47 @@ public class ActiveFacePositionProviderRouter : MonoBehaviour, IFacePositionProv
             return;
 
         lastMode = modeController.CurrentMode;
+        if (personTrackManager != null)
+            personTrackManager.ClearTracks();
         ClearInactiveProviderReferences();
         LogActivePath("ModeChanged");
+    }
+
+    private void UpdatePersonTracks()
+    {
+        if (personTrackManager == null)
+            return;
+
+        IFacePositionProvider provider = ActiveProvider;
+        if (provider == null || !IsActiveProviderEnabled())
+        {
+            personTrackManager.UpdateTracks(System.Array.Empty<FaceTrackCandidate>(), Time.unscaledTime);
+            return;
+        }
+
+        personTrackManager.UpdateTracks(GetActiveCandidates(provider), Time.unscaledTime);
+    }
+
+    private IReadOnlyList<FaceTrackCandidate> GetActiveCandidates(IFacePositionProvider provider)
+    {
+        if (provider is IMultiFacePositionProvider multiFaceProvider)
+            return multiFaceProvider.FaceTrackCandidates;
+
+        singleFaceFallbackCandidates.Clear();
+        if (provider.HasFace)
+        {
+            Rect bounds = provider.NormalizedFaceRect;
+            singleFaceFallbackCandidates.Add(new FaceTrackCandidate
+            {
+                DetectionIndex = 0,
+                NormalizedCenter = provider.NormalizedFaceCenter,
+                NormalizedBounds = bounds,
+                Confidence = 1f,
+                HasBounds = bounds.width > 0.001f && bounds.height > 0.001f
+            });
+        }
+
+        return singleFaceFallbackCandidates;
     }
 
     private void ClearInactiveProviderReferences()

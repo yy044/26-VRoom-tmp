@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using Mediapipe;
 using Mediapipe.Tasks.Core;
 using Mediapipe.Tasks.Vision.Core;
@@ -31,7 +32,7 @@ public enum BackFaceModelMode
     AutoByFaceSize
 }
 
-public class BackCameraFacePositionProvider : MonoBehaviour, IFacePositionProvider
+public class BackCameraFacePositionProvider : MonoBehaviour, IFacePositionProvider, IMultiFacePositionProvider
 {
     private const string LogTag = "[BackFace2DAudit]";
     private const string ModelLogTag = "[BackFaceModelAudit]";
@@ -51,7 +52,7 @@ public class BackCameraFacePositionProvider : MonoBehaviour, IFacePositionProvid
 #else
         BaseOptions.Delegate.CPU;
 #endif
-    [SerializeField, Range(1, 4)] private int maxFaces = 1;
+    [SerializeField, Range(1, 4)] private int maxFaces = 2;
     [SerializeField, Range(0f, 1f)] private float shortRangeMinDetectionConfidence = 0.5f;
     [SerializeField, Range(0f, 1f)] private float fullRangeMinDetectionConfidence = 0.2f;
     [SerializeField, Range(0f, 1f)] private float minSuppressionThreshold = 0.3f;
@@ -98,12 +99,14 @@ public class BackCameraFacePositionProvider : MonoBehaviour, IFacePositionProvid
     private bool loggedCpuImageSuccess;
     private bool loggedMediaPipeImageReceived;
     private bool loggedDetectionCountPositive;
+    private readonly List<FaceTrackCandidate> faceTrackCandidates = new();
     private readonly System.Diagnostics.Stopwatch stopwatch = new();
 
     public bool HasFace => hasFace;
     public Vector2 NormalizedFaceCenter => normalizedFaceCenter;
     public UnityRect NormalizedFaceRect => normalizedFaceRect;
     public string SourceName => "BackFace2D";
+    public IReadOnlyList<FaceTrackCandidate> FaceTrackCandidates => faceTrackCandidates;
     public BackFaceModelMode ModelMode => modelMode;
     public BackFaceModelMode ConfiguredModelMode => modelMode;
     public string ActiveModelName => string.IsNullOrEmpty(activeModelAssetName) ? GetModelAssetName(GetInitialModelKind()) : activeModelAssetName;
@@ -386,6 +389,8 @@ public class BackCameraFacePositionProvider : MonoBehaviour, IFacePositionProvid
         if (faceCount > 0)
             LogOnce(ref loggedDetectionCountPositive, $"DetectionCountPositive count={faceCount}");
 
+        UpdateFaceTrackCandidates(inferenceRan);
+
         if (inferenceRan && TryGetBestDetection(out MpRect bestBox, out bestFaceConfidence))
             SetFaceFromDetection(bestBox);
         else
@@ -470,6 +475,34 @@ public class BackCameraFacePositionProvider : MonoBehaviour, IFacePositionProvid
         hasFace = true;
 
         LogBackCameraFacePosition(box, rawMediaPipeRect, displaySpaceTopLeftRect, videoRotationAngle, videoVerticallyMirrored);
+    }
+
+    private void UpdateFaceTrackCandidates(bool inferenceRan)
+    {
+        faceTrackCandidates.Clear();
+
+        if (!inferenceRan || result.detections == null || result.detections.Count == 0)
+            return;
+
+        int videoRotationAngle = GetVideoRotationAngle();
+        for (int i = 0; i < result.detections.Count; i++)
+        {
+            var detection = result.detections[i];
+            UnityRect rawMediaPipeRect = GetDetectorSpaceRect(detection.boundingBox);
+            UnityRect displaySpaceTopLeftRect = RotateTextureRectToDisplaySpace(rawMediaPipeRect, videoRotationAngle);
+            float confidence = detection.categories != null && detection.categories.Count > 0
+                ? detection.categories[0].score
+                : 0f;
+
+            faceTrackCandidates.Add(new FaceTrackCandidate
+            {
+                DetectionIndex = i,
+                NormalizedCenter = displaySpaceTopLeftRect.center,
+                NormalizedBounds = displaySpaceTopLeftRect,
+                Confidence = confidence,
+                HasBounds = displaySpaceTopLeftRect.width > 0.001f && displaySpaceTopLeftRect.height > 0.001f
+            });
+        }
     }
 
     private UnityRect GetDetectorSpaceRect(MpRect box)
@@ -595,6 +628,7 @@ public class BackCameraFacePositionProvider : MonoBehaviour, IFacePositionProvid
         hasFace = false;
         normalizedFaceCenter = Vector2.zero;
         normalizedFaceRect = new UnityRect(0f, 0f, 0f, 0f);
+        faceTrackCandidates.Clear();
         normalizedFaceArea = 0f;
         bestFaceConfidence = 0f;
         hasLastRawMediaPipeBox = false;

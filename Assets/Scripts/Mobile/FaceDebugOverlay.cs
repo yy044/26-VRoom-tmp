@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -24,6 +25,9 @@ public class FaceDebugOverlay : MonoBehaviour
     [SerializeField] private bool showFallbackOffsetAnchor = true;
     [SerializeField] private bool showCenterFallbackWhenNoFace = true;
     [SerializeField] private bool showMovementStageMarkers = true;
+    [SerializeField] private bool showPersonLabels = true;
+    [SerializeField] private bool showPersonBoxes = true;
+    [SerializeField] private bool showPrimaryPerson = true;
     [SerializeField] private bool autoHideWhenNoFace = true;
 
     [Header("Debug Colors")]
@@ -33,6 +37,9 @@ public class FaceDebugOverlay : MonoBehaviour
     [SerializeField] private Color smoothedFaceTargetColor = new Color(0.15f, 0.95f, 1f, 0.95f);
     [SerializeField] private Color desiredSubtitlePositionColor = new Color(1f, 1f, 1f, 0.95f);
     [SerializeField] private Color actualSubtitlePositionColor = new Color(0.2f, 1f, 0.35f, 0.95f);
+    [SerializeField] private Color personBoxColor = new Color(1f, 0.95f, 0.15f, 0.9f);
+    [SerializeField] private Color personLabelColor = new Color(1f, 1f, 1f, 1f);
+    [SerializeField] private Color primaryPersonColor = new Color(0.2f, 1f, 0.35f, 0.95f);
     [SerializeField] private Color boundingBoxColor = new Color(0f, 0.75f, 1f, 0.9f);
     [SerializeField] private Color connectionLineColor = new Color(1f, 1f, 1f, 0.65f);
     [SerializeField] private Color boundsTopCenterColor = new Color(0.35f, 1f, 1f, 0.9f);
@@ -45,6 +52,8 @@ public class FaceDebugOverlay : MonoBehaviour
     [SerializeField] private Vector2 faceCenterSize = new Vector2(18f, 18f);
     [SerializeField] private Vector2 subtitleTargetSize = new Vector2(22f, 22f);
     [SerializeField] private Vector2 movementStageMarkerSize = new Vector2(18f, 18f);
+    [SerializeField] private Vector2 primaryPersonMarkerSize = new Vector2(24f, 24f);
+    [SerializeField] private Vector2 personLabelSize = new Vector2(48f, 24f);
     [SerializeField] private Vector2 boundsTopCenterSize = new Vector2(12f, 12f);
     [SerializeField] private Vector2 boundsAnchorSize = new Vector2(16f, 16f);
     [SerializeField] private Vector2 fallbackOffsetAnchorSize = new Vector2(14f, 14f);
@@ -67,6 +76,7 @@ public class FaceDebugOverlay : MonoBehaviour
     private Image smoothedFaceTargetImage;
     private Image desiredSubtitlePositionImage;
     private Image actualSubtitlePositionImage;
+    private Image primaryPersonImage;
     private Image boundsTopCenterImage;
     private Image boundsAnchorImage;
     private Image adaptivePaddingLineImage;
@@ -74,6 +84,8 @@ public class FaceDebugOverlay : MonoBehaviour
     private Image fallbackCenterImage;
     private Image connectionLineImage;
     private readonly Image[] boundingBoxEdges = new Image[4];
+    private readonly Image[] personBoxEdges = new Image[8];
+    private readonly Text[] personLabels = new Text[2];
     private float nextLogTime;
     private float nextOverlayAuditLogTime;
     private bool loggedRectAdjustment;
@@ -122,6 +134,7 @@ public class FaceDebugOverlay : MonoBehaviour
 
         for (int i = 0; i < boundingBoxEdges.Length; i++)
             SetVisible(boundingBoxEdges[i], showBoundingBox && hasBounds);
+        SetPersonTrackVisibility();
 
         if (hasFace)
         {
@@ -135,6 +148,7 @@ public class FaceDebugOverlay : MonoBehaviour
             PositionImage(faceCenterImage, faceCenter, faceCenterSize, faceCenterColor);
             PositionMovementStageMarkers();
             PositionBoundingBox(faceProvider.NormalizedFaceRect);
+            PositionPersonTracks();
 
             if (anchorMode == "bounds-top")
             {
@@ -168,6 +182,9 @@ public class FaceDebugOverlay : MonoBehaviour
                 PositionMovementStageMarkers();
             }
         }
+
+        if (!hasFace)
+            PositionPersonTracks();
 
         LogState(hasFace);
     }
@@ -217,6 +234,7 @@ public class FaceDebugOverlay : MonoBehaviour
         smoothedFaceTargetImage = CreateImage("SmoothedFaceTarget", overlayRoot);
         desiredSubtitlePositionImage = CreateImage("DesiredSubtitlePosition", overlayRoot);
         actualSubtitlePositionImage = CreateImage("ActualSubtitlePosition", overlayRoot);
+        primaryPersonImage = CreateImage("PrimaryPerson", overlayRoot);
         boundsTopCenterImage = CreateImage("BoundsTopCenter", overlayRoot);
         boundsAnchorImage = CreateImage("BoundsTopAnchor", overlayRoot);
         adaptivePaddingLineImage = CreateImage("AdaptivePaddingLine", overlayRoot);
@@ -226,6 +244,12 @@ public class FaceDebugOverlay : MonoBehaviour
 
         for (int i = 0; i < boundingBoxEdges.Length; i++)
             boundingBoxEdges[i] = CreateImage($"FaceBoundsEdge{i}", overlayRoot);
+
+        for (int i = 0; i < personBoxEdges.Length; i++)
+            personBoxEdges[i] = CreateImage($"PersonBoxEdge{i}", overlayRoot);
+
+        for (int i = 0; i < personLabels.Length; i++)
+            personLabels[i] = CreateText($"PersonLabel{i + 1}", overlayRoot);
 
         SetAllHidden();
     }
@@ -246,6 +270,18 @@ public class FaceDebugOverlay : MonoBehaviour
         return image;
     }
 
+    private static Text CreateText(string objectName, RectTransform parent)
+    {
+        RectTransform rectTransform = CreateRect(objectName, parent);
+        Text text = rectTransform.gameObject.AddComponent<Text>();
+        text.raycastTarget = false;
+        text.alignment = TextAnchor.MiddleCenter;
+        text.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+        text.fontSize = 18;
+        text.fontStyle = FontStyle.Bold;
+        return text;
+    }
+
     private void SetAllHidden()
     {
         SetVisible(faceCenterImage, false);
@@ -254,6 +290,7 @@ public class FaceDebugOverlay : MonoBehaviour
         SetVisible(smoothedFaceTargetImage, false);
         SetVisible(desiredSubtitlePositionImage, false);
         SetVisible(actualSubtitlePositionImage, false);
+        SetVisible(primaryPersonImage, false);
         SetVisible(boundsTopCenterImage, false);
         SetVisible(boundsAnchorImage, false);
         SetVisible(adaptivePaddingLineImage, false);
@@ -263,6 +300,15 @@ public class FaceDebugOverlay : MonoBehaviour
 
         for (int i = 0; i < boundingBoxEdges.Length; i++)
             SetVisible(boundingBoxEdges[i], false);
+
+        for (int i = 0; i < personBoxEdges.Length; i++)
+            SetVisible(personBoxEdges[i], false);
+
+        for (int i = 0; i < personLabels.Length; i++)
+        {
+            if (personLabels[i] != null)
+                personLabels[i].gameObject.SetActive(false);
+        }
     }
 
     private static void SetVisible(Image image, bool visible)
@@ -335,6 +381,80 @@ public class FaceDebugOverlay : MonoBehaviour
                 movementStageMarkerSize,
                 actualSubtitlePositionColor);
         }
+    }
+
+    private void SetPersonTrackVisibility()
+    {
+        bool hasTracks = coordinateRouter != null && coordinateRouter.ActivePersonTracks.Count > 0;
+        SetVisible(primaryPersonImage, showPrimaryPerson && hasTracks && coordinateRouter.HasPrimaryPersonTrack);
+
+        for (int i = 0; i < personBoxEdges.Length; i++)
+            SetVisible(personBoxEdges[i], showPersonBoxes && hasTracks && i / 4 < coordinateRouter.ActivePersonTracks.Count && i / 4 < 2);
+
+        for (int i = 0; i < personLabels.Length; i++)
+        {
+            if (personLabels[i] != null)
+                personLabels[i].gameObject.SetActive(showPersonLabels && hasTracks && i < coordinateRouter.ActivePersonTracks.Count && i < 2);
+        }
+    }
+
+    private void PositionPersonTracks()
+    {
+        if (coordinateRouter == null)
+            return;
+
+        IReadOnlyList<PersonFaceTrack> tracks = coordinateRouter.ActivePersonTracks;
+        for (int i = 0; i < tracks.Count && i < 2; i++)
+        {
+            PersonFaceTrack track = tracks[i];
+            if (showPersonBoxes && track.HasBounds)
+                PositionPersonBox(i, TransformProviderRect(track.NormalizedBounds));
+
+            if (showPersonLabels && personLabels[i] != null)
+                PositionPersonLabel(personLabels[i], track);
+        }
+
+        if (showPrimaryPerson && coordinateRouter.HasPrimaryPersonTrack)
+        {
+            PersonFaceTrack primaryTrack = coordinateRouter.PrimaryPersonTrack;
+            PositionImage(
+                primaryPersonImage,
+                NormalizedToAnchoredPosition(TransformProviderPoint(primaryTrack.NormalizedCenter)),
+                primaryPersonMarkerSize,
+                primaryPersonColor);
+        }
+    }
+
+    private void PositionPersonBox(int personIndex, Rect transformedRect)
+    {
+        int edgeOffset = personIndex * 4;
+        Vector2 min = NormalizedToAnchoredPosition(new Vector2(transformedRect.xMin, transformedRect.yMin));
+        Vector2 max = NormalizedToAnchoredPosition(new Vector2(transformedRect.xMax, transformedRect.yMax));
+        float width = Mathf.Abs(max.x - min.x);
+        float height = Mathf.Abs(max.y - min.y);
+        Vector2 center = (min + max) * 0.5f;
+
+        PositionImage(personBoxEdges[edgeOffset], new Vector2(center.x, max.y), new Vector2(width, boundingBoxThickness), personBoxColor);
+        PositionImage(personBoxEdges[edgeOffset + 1], new Vector2(center.x, min.y), new Vector2(width, boundingBoxThickness), personBoxColor);
+        PositionImage(personBoxEdges[edgeOffset + 2], new Vector2(min.x, center.y), new Vector2(boundingBoxThickness, height), personBoxColor);
+        PositionImage(personBoxEdges[edgeOffset + 3], new Vector2(max.x, center.y), new Vector2(boundingBoxThickness, height), personBoxColor);
+    }
+
+    private void PositionPersonLabel(Text label, PersonFaceTrack track)
+    {
+        Vector2 normalizedLabelPosition = track.HasBounds
+            ? new Vector2(track.NormalizedBounds.center.x, track.NormalizedBounds.yMax)
+            : track.NormalizedCenter;
+        Vector2 labelPosition = NormalizedToAnchoredPosition(TransformProviderPoint(normalizedLabelPosition));
+        RectTransform rectTransform = label.rectTransform;
+        rectTransform.anchorMin = new Vector2(0.5f, 0.5f);
+        rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
+        rectTransform.pivot = new Vector2(0.5f, 0f);
+        rectTransform.anchoredPosition = labelPosition + new Vector2(0f, 6f);
+        rectTransform.sizeDelta = personLabelSize;
+        rectTransform.localRotation = Quaternion.identity;
+        label.text = track.Label;
+        label.color = personLabelColor;
     }
 
     private void LogOverlaySizeAudit(Rect transformedBounds, float width, float height, Vector2 center)

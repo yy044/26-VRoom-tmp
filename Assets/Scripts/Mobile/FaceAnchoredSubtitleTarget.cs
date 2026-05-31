@@ -92,6 +92,15 @@ public class SubtitleFollowState
     }
 }
 
+public enum SubtitlePersonToFollow
+{
+    [InspectorName("Primary Person")]
+    PrimaryPerson,
+
+    P1,
+    P2
+}
+
 public class FaceAnchoredSubtitleTarget : MonoBehaviour
 {
     [Header("Target")]
@@ -108,6 +117,10 @@ public class FaceAnchoredSubtitleTarget : MonoBehaviour
 
     [Tooltip("Normalized target position used when no face is detected.")]
     [SerializeField] private Vector2 centerFallbackAnchor = new Vector2(0.5f, 0.5f);
+
+    [Header("Person Selection")]
+    [InspectorName("Person To Follow")]
+    [SerializeField] private SubtitlePersonToFollow personToFollow = SubtitlePersonToFollow.PrimaryPerson;
 
     [Header("Front Camera Subtitle Movement")]
     [SerializeField] private SubtitleFollowSettings frontCameraFollowSettings = SubtitleFollowSettings.FrontDefaults();
@@ -147,6 +160,8 @@ public class FaceAnchoredSubtitleTarget : MonoBehaviour
     private float nextLogTime;
     private bool loggedRectAdjustment;
     private string lastLogState;
+    private Vector2 selectedFaceCenter;
+    private Rect selectedFaceRect;
 
     public SubtitleFollowSettings ActiveFollowSettings => GetActiveFollowSettings();
     public string ActiveFollowSettingsName => GetActiveFollowSettingsName();
@@ -247,13 +262,13 @@ public class FaceAnchoredSubtitleTarget : MonoBehaviour
 
     private Vector2 GetTargetNormalizedPosition(SubtitleFollowSettings followSettings, SubtitleFollowState followState, out bool hasFace, out string mode)
     {
-        hasFace = faceProvider != null && faceProvider.HasFace;
+        hasFace = TryGetSelectedFace(out selectedFaceCenter, out selectedFaceRect);
         mode = hasFace ? "face" : "fallback";
 
         Vector2 normalizedPosition = centerFallbackAnchor;
         if (hasFace)
         {
-            currentRawFaceCenter = faceProvider.NormalizedFaceCenter;
+            currentRawFaceCenter = selectedFaceCenter;
             normalizedPosition = GetFaceAnchorPosition(followSettings, out mode);
             currentRawFaceTarget = normalizedPosition;
             normalizedPosition = SmoothFaceAnchor(normalizedPosition, followSettings, followState);
@@ -280,7 +295,7 @@ public class FaceAnchoredSubtitleTarget : MonoBehaviour
 
     private Vector2 GetFaceAnchorPosition(SubtitleFollowSettings followSettings, out string mode)
     {
-        Rect transformedBounds = TransformProviderRect(faceProvider.NormalizedFaceRect);
+        Rect transformedBounds = TransformProviderRect(selectedFaceRect);
         if (followSettings.UseTopOfFaceBox && HasValidBounds(transformedBounds))
         {
             mode = "bounds-top";
@@ -295,8 +310,63 @@ public class FaceAnchoredSubtitleTarget : MonoBehaviour
         mode = "center-offset";
         currentFaceHeight = 0f;
         currentAdaptivePadding = 0f;
-        currentAnchorPosition = TransformProviderPoint(faceProvider.NormalizedFaceCenter) + followSettings.CenterOffsetWhenNoFace;
+        currentAnchorPosition = TransformProviderPoint(selectedFaceCenter) + followSettings.CenterOffsetWhenNoFace;
         return currentAnchorPosition;
+    }
+
+    private bool TryGetSelectedFace(out Vector2 center, out Rect bounds)
+    {
+        if (coordinateRouter != null)
+        {
+            if (TryGetSelectedPersonTrack(out PersonFaceTrack track))
+            {
+                center = track.NormalizedCenter;
+                bounds = track.NormalizedBounds;
+                return true;
+            }
+        }
+
+        if (faceProvider != null && faceProvider.HasFace)
+        {
+            center = faceProvider.NormalizedFaceCenter;
+            bounds = faceProvider.NormalizedFaceRect;
+            return true;
+        }
+
+        center = Vector2.zero;
+        bounds = Rect.zero;
+        return false;
+    }
+
+    private bool TryGetSelectedPersonTrack(out PersonFaceTrack track)
+    {
+        if (coordinateRouter == null)
+        {
+            track = default;
+            return false;
+        }
+
+        switch (personToFollow)
+        {
+            case SubtitlePersonToFollow.P1:
+                if (coordinateRouter.TryGetPersonTrack(1, out track))
+                    return true;
+                break;
+
+            case SubtitlePersonToFollow.P2:
+                if (coordinateRouter.TryGetPersonTrack(2, out track))
+                    return true;
+                break;
+        }
+
+        if (coordinateRouter.HasPrimaryPersonTrack)
+        {
+            track = coordinateRouter.PrimaryPersonTrack;
+            return true;
+        }
+
+        track = default;
+        return false;
     }
 
     private Vector2 SmoothFaceAnchor(Vector2 normalizedPosition, SubtitleFollowSettings followSettings, SubtitleFollowState followState)

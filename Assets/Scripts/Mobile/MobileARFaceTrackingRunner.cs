@@ -1,5 +1,6 @@
 using System.Collections;
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.XR.ARFoundation;
 using UnityEngine.XR.ARSubsystems;
@@ -12,7 +13,7 @@ using UnityEngine.InputSystem;
 using UnityEngine.Android;
 #endif
 
-public class MobileARFaceTrackingRunner : MonoBehaviour, IFacePositionProvider
+public class MobileARFaceTrackingRunner : MonoBehaviour, IFacePositionProvider, IMultiFacePositionProvider
 {
     public enum TrackingSource
     {
@@ -78,6 +79,7 @@ public class MobileARFaceTrackingRunner : MonoBehaviour, IFacePositionProvider
     private string lastSessionAuditState;
     private string lastFaceUIStatus;
     private string lastCenterMappingAuditState;
+    private readonly List<FaceTrackCandidate> faceTrackCandidates = new();
 
     public int ImageWidth => Mathf.Max(1, Screen.width);
     public int ImageHeight => Mathf.Max(1, Screen.height);
@@ -87,6 +89,7 @@ public class MobileARFaceTrackingRunner : MonoBehaviour, IFacePositionProvider
     public Vector2 NormalizedFaceCenter => hasLatestDetection ? latestDetection.normalizedCenter : Vector2.zero;
     public Rect NormalizedFaceRect => hasLatestDetection ? latestDetection.normalizedRect : new Rect(0f, 0f, 0f, 0f);
     public string SourceName => "FrontFaceAR";
+    public IReadOnlyList<FaceTrackCandidate> FaceTrackCandidates => faceTrackCandidates;
 
     private void Awake()
     {
@@ -108,6 +111,7 @@ public class MobileARFaceTrackingRunner : MonoBehaviour, IFacePositionProvider
         hasLatestDetection = false;
         HasRealFaceTracking = false;
         FaceTrackableCount = 0;
+        faceTrackCandidates.Clear();
     }
 
     private void Update()
@@ -118,6 +122,7 @@ public class MobileARFaceTrackingRunner : MonoBehaviour, IFacePositionProvider
                 hasLatestDetection = false;
                 HasRealFaceTracking = false;
                 FaceTrackableCount = 0;
+                faceTrackCandidates.Clear();
                 break;
 
             case TrackingSource.TouchPosition:
@@ -165,6 +170,7 @@ public class MobileARFaceTrackingRunner : MonoBehaviour, IFacePositionProvider
         latestDetection = new MobileFaceDetection(rect);
         hasLatestDetection = true;
         HasRealFaceTracking = false;
+        faceTrackCandidates.Clear();
     }
 
     private void UpdateFromTouch()
@@ -196,6 +202,7 @@ public class MobileARFaceTrackingRunner : MonoBehaviour, IFacePositionProvider
         }
 
         FaceTrackableCount = 0;
+        faceTrackCandidates.Clear();
 
         foreach (ARFace face in faceManager.trackables)
         {
@@ -206,7 +213,7 @@ public class MobileARFaceTrackingRunner : MonoBehaviour, IFacePositionProvider
             {
                 latestDetection = new MobileFaceDetection();
                 hasLatestDetection = true;
-                return;
+                continue;
             }
 
             Vector3 screenPosition = trackingCamera.WorldToScreenPoint(face.transform.position);
@@ -214,7 +221,7 @@ public class MobileARFaceTrackingRunner : MonoBehaviour, IFacePositionProvider
             {
                 latestDetection = new MobileFaceDetection();
                 hasLatestDetection = true;
-                return;
+                continue;
             }
 
             Vector2 projectedRawCenter = new Vector2(
@@ -233,12 +240,15 @@ public class MobileARFaceTrackingRunner : MonoBehaviour, IFacePositionProvider
             latestDetection = new MobileFaceDetection(normalizedCenter, normalizedBounds);
             hasLatestDetection = true;
             HasRealFaceTracking = true;
+            faceTrackCandidates.Add(CreateCandidate(faceTrackCandidates.Count, latestDetection));
             LogCenterMappingAudit(projectedRawCenter, normalizedBounds, normalizedCenter, hasProjectedBounds);
-            return;
         }
 
-        HasRealFaceTracking = false;
-        SetMissingARFaceDetection();
+        if (faceTrackCandidates.Count == 0)
+        {
+            HasRealFaceTracking = false;
+            SetMissingARFaceDetection();
+        }
     }
 
     private void SetFallbackDetection()
@@ -255,6 +265,7 @@ public class MobileARFaceTrackingRunner : MonoBehaviour, IFacePositionProvider
 
         latestDetection = new MobileFaceDetection(rect, true);
         hasLatestDetection = true;
+        faceTrackCandidates.Clear();
     }
 
     private void SetMissingARFaceDetection()
@@ -266,6 +277,19 @@ public class MobileARFaceTrackingRunner : MonoBehaviour, IFacePositionProvider
         }
 
         hasLatestDetection = false;
+        faceTrackCandidates.Clear();
+    }
+
+    private static FaceTrackCandidate CreateCandidate(int detectionIndex, MobileFaceDetection detection)
+    {
+        return new FaceTrackCandidate
+        {
+            DetectionIndex = detectionIndex,
+            NormalizedCenter = detection.normalizedCenter,
+            NormalizedBounds = detection.normalizedRect,
+            Confidence = detection.isFallback ? 0f : 1f,
+            HasBounds = detection.normalizedRect.width > 0.001f && detection.normalizedRect.height > 0.001f
+        };
     }
 
     private bool TryGetProjectedFaceBounds(ARFace face, out Rect normalizedBounds)

@@ -453,7 +453,7 @@ MonoBehaviour:
   targetFps: 8
   maxInputWidth: 320
   delegateMode: 1
-  maxFaces: 1
+  maxFaces: 2
   shortRangeMinDetectionConfidence: 0.5
   fullRangeMinDetectionConfidence: 0.2
   minSuppressionThreshold: 0.3
@@ -1089,6 +1089,7 @@ GameObject:
   - component: {fileID: 937679139}
   - component: {fileID: 937679140}
   - component: {fileID: 937679141}
+  - component: {fileID: 937679144}
   - component: {fileID: 937679142}
   - component: {fileID: 937679143}
   m_Layer: 0
@@ -1253,8 +1254,8 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 9d2d7c7b50ab4e54c990b9761fa7d00b, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
+  m_Name:
+  m_EditorClassIdentifier:
   modeController: {fileID: 937679140}
   frontProviderBehaviour: {fileID: 937679135}
   backProviderBehaviour: {fileID: 154705329}
@@ -1283,7 +1284,25 @@ MonoBehaviour:
     swapXY: 0
     rotate90Clockwise: 0
     rotate90CounterClockwise: 0
+  personTrackManager: {fileID: 937679144}
   autoBindOnAwake: 1
+--- !u!114 &937679144
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 937679129}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 37c946c9a5d44e74a83b9cb2d132bf4d, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  maximumPeopleToTrack: 2
+  personMatchDistance: 0.18
+  forgetPersonAfterSeconds: 1
+  newPersonPriority: 0
+  primaryPersonSelection: 0
 --- !u!114 &937679142
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1309,6 +1328,9 @@ MonoBehaviour:
   showFallbackOffsetAnchor: 1
   showCenterFallbackWhenNoFace: 1
   showMovementStageMarkers: 1
+  showPersonLabels: 1
+  showPersonBoxes: 1
+  showPrimaryPerson: 1
   autoHideWhenNoFace: 1
   faceCenterColor: {r: 0, g: 1, b: 0.2, a: 0.9}
   subtitleTargetColor: {r: 1, g: 0.85, b: 0, a: 0.9}
@@ -1316,6 +1338,9 @@ MonoBehaviour:
   smoothedFaceTargetColor: {r: 0.15, g: 0.95, b: 1, a: 0.95}
   desiredSubtitlePositionColor: {r: 1, g: 1, b: 1, a: 0.95}
   actualSubtitlePositionColor: {r: 0.2, g: 1, b: 0.35, a: 0.95}
+  personBoxColor: {r: 1, g: 0.95, b: 0.15, a: 0.9}
+  personLabelColor: {r: 1, g: 1, b: 1, a: 1}
+  primaryPersonColor: {r: 0.2, g: 1, b: 0.35, a: 0.95}
   boundingBoxColor: {r: 0, g: 0.75, b: 1, a: 0.9}
   connectionLineColor: {r: 1, g: 1, b: 1, a: 0.65}
   boundsTopCenterColor: {r: 0.35, g: 1, b: 1, a: 0.9}
@@ -1326,6 +1351,8 @@ MonoBehaviour:
   faceCenterSize: {x: 18, y: 18}
   subtitleTargetSize: {x: 22, y: 22}
   movementStageMarkerSize: {x: 18, y: 18}
+  primaryPersonMarkerSize: {x: 24, y: 24}
+  personLabelSize: {x: 48, y: 24}
   boundsTopCenterSize: {x: 12, y: 12}
   boundsAnchorSize: {x: 16, y: 16}
   fallbackOffsetAnchorSize: {x: 14, y: 14}
@@ -2740,6 +2767,7 @@ MonoBehaviour:
   faceProviderBehaviour: {fileID: 937679141}
   useCenterWhenNoFace: 1
   centerFallbackAnchor: {x: 0.5, y: 0.5}
+  personToFollow: 0
   frontCameraFollowSettings:
     centerOffsetWhenNoFace: {x: 0, y: 0.12}
     useTopOfFaceBox: 1
