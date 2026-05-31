@@ -1334,6 +1334,10 @@ MonoBehaviour:
       swapXY: 0
       rotate90Clockwise: 0
       rotate90CounterClockwise: 0
+    useRectAdjustment: 1
+    rectWidthMultiplier: 1.15
+    rectHeightMultiplier: 1.6
+    rectYOffsetNormalized: 0.05
   back2DTransform:
     mirrorX: 0
     invertY: 1

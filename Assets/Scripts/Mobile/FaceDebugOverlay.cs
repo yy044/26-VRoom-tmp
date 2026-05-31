@@ -75,6 +75,8 @@ public class FaceDebugOverlay : MonoBehaviour
     private Image connectionLineImage;
     private readonly Image[] boundingBoxEdges = new Image[4];
     private float nextLogTime;
+    private float nextOverlayAuditLogTime;
+    private bool loggedRectAdjustment;
     private string lastLogState;
 
     private void Awake()
@@ -280,10 +282,30 @@ public class FaceDebugOverlay : MonoBehaviour
         float height = Mathf.Abs(max.y - min.y);
         Vector2 center = (min + max) * 0.5f;
 
+        LogOverlaySizeAudit(transformedRect, width, height, center);
+
         PositionImage(boundingBoxEdges[0], new Vector2(center.x, max.y), new Vector2(width, boundingBoxThickness), boundingBoxColor);
         PositionImage(boundingBoxEdges[1], new Vector2(center.x, min.y), new Vector2(width, boundingBoxThickness), boundingBoxColor);
         PositionImage(boundingBoxEdges[2], new Vector2(min.x, center.y), new Vector2(boundingBoxThickness, height), boundingBoxColor);
         PositionImage(boundingBoxEdges[3], new Vector2(max.x, center.y), new Vector2(boundingBoxThickness, height), boundingBoxColor);
+    }
+
+    private void LogOverlaySizeAudit(Rect transformedBounds, float width, float height, Vector2 center)
+    {
+        if (Time.unscaledTime < nextOverlayAuditLogTime)
+            return;
+
+        nextOverlayAuditLogTime = Time.unscaledTime + 1f;
+        Vector2 topSize = new Vector2(width, boundingBoxThickness);
+        Vector2 leftSize = new Vector2(boundingBoxThickness, height);
+        Debug.Log(
+            $"[FaceOverlayAudit] " +
+            $"transformedBounds=(w:{transformedBounds.width:0.0000},h:{transformedBounds.height:0.0000}) " +
+            $"overlaySize=(w:{width:0.0},h:{height:0.0}) " +
+            $"topSize=(w:{topSize.x:0.0},h:{topSize.y:0.0}) " +
+            $"leftSize=(w:{leftSize.x:0.0},h:{leftSize.y:0.0}) " +
+            $"center=({center.x:0.0},{center.y:0.0})",
+            this);
     }
 
     private Vector2 GetSubtitleAnchorPoint(
@@ -353,7 +375,10 @@ public class FaceDebugOverlay : MonoBehaviour
 
     private Rect TransformProviderRect(Rect normalizedRect)
     {
-        return FaceCoordinateTransform.TransformRect(normalizedRect, GetActiveTransformSettings());
+        Rect transformedRect = FaceCoordinateTransform.TransformRect(normalizedRect, GetActiveTransformSettings());
+        CameraModeMappingProfile profile = GetActiveRectAdjustmentProfile();
+        LogRectAdjustment(profile);
+        return profile.ApplyRectAdjustment(transformedRect);
     }
 
     private FaceCoordinateTransformSettings GetActiveTransformSettings()
@@ -361,6 +386,28 @@ public class FaceDebugOverlay : MonoBehaviour
         return coordinateRouter != null
             ? coordinateRouter.CurrentTransformSettings
             : FaceCoordinateTransformSettings.CurrentMobileDefault;
+    }
+
+    private CameraModeMappingProfile GetActiveRectAdjustmentProfile()
+    {
+        return coordinateRouter != null && coordinateRouter.CurrentMode == MobileARModeController.MobileTrackingMode.BackFace2D
+            ? coordinateRouter.Back2DProfile
+            : CameraModeMappingProfile.CreateFrontARDefault();
+    }
+
+    private void LogRectAdjustment(CameraModeMappingProfile profile)
+    {
+        if (loggedRectAdjustment)
+            return;
+
+        loggedRectAdjustment = true;
+        Debug.Log(
+            $"[FaceRectAdjustment] consumer=DebugOverlay " +
+            $"useRectAdjustment={profile.useRectAdjustment} " +
+            $"rectWidthMultiplier={profile.rectWidthMultiplier:0.###} " +
+            $"rectHeightMultiplier={profile.rectHeightMultiplier:0.###} " +
+            $"rectYOffsetNormalized={profile.rectYOffsetNormalized:0.###}",
+            this);
     }
 
     private Vector2 WorldToOverlayAnchoredPosition(Vector3 worldPosition)

@@ -64,6 +64,7 @@ public class FaceAnchoredSubtitleTarget : MonoBehaviour
     private Vector2 smoothedAnchor;
     private bool hasSmoothedAnchor;
     private float nextLogTime;
+    private bool loggedRectAdjustment;
     private string lastLogState;
 
     private void Awake()
@@ -226,7 +227,10 @@ public class FaceAnchoredSubtitleTarget : MonoBehaviour
 
     private Rect TransformProviderRect(Rect normalizedRect)
     {
-        return FaceCoordinateTransform.TransformRect(normalizedRect, GetActiveTransformSettings());
+        Rect transformedRect = FaceCoordinateTransform.TransformRect(normalizedRect, GetActiveTransformSettings());
+        CameraModeMappingProfile profile = GetActiveRectAdjustmentProfile();
+        LogRectAdjustment(profile);
+        return profile.ApplyRectAdjustment(transformedRect);
     }
 
     private FaceCoordinateTransformSettings GetActiveTransformSettings()
@@ -234,6 +238,28 @@ public class FaceAnchoredSubtitleTarget : MonoBehaviour
         return coordinateRouter != null
             ? coordinateRouter.CurrentTransformSettings
             : FaceCoordinateTransformSettings.CurrentMobileDefault;
+    }
+
+    private CameraModeMappingProfile GetActiveRectAdjustmentProfile()
+    {
+        return coordinateRouter != null && coordinateRouter.CurrentMode == MobileARModeController.MobileTrackingMode.BackFace2D
+            ? coordinateRouter.Back2DProfile
+            : CameraModeMappingProfile.CreateFrontARDefault();
+    }
+
+    private void LogRectAdjustment(CameraModeMappingProfile profile)
+    {
+        if (loggedRectAdjustment)
+            return;
+
+        loggedRectAdjustment = true;
+        Debug.Log(
+            $"[FaceRectAdjustment] consumer=SubtitleTarget " +
+            $"useRectAdjustment={profile.useRectAdjustment} " +
+            $"rectWidthMultiplier={profile.rectWidthMultiplier:0.###} " +
+            $"rectHeightMultiplier={profile.rectHeightMultiplier:0.###} " +
+            $"rectYOffsetNormalized={profile.rectYOffsetNormalized:0.###}",
+            this);
     }
 
     private static bool HasValidBounds(Rect normalizedRect)

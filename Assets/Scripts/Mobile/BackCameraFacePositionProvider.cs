@@ -560,6 +560,8 @@ public class BackCameraFacePositionProvider : MonoBehaviour, IFacePositionProvid
             return;
 
         string facing = cameraManager != null ? cameraManager.currentFacingDirection.ToString() : "NoCameraManager";
+        float boundingBoxPixelWidth = Mathf.Max(0f, box.right - box.left);
+        float boundingBoxPixelHeight = Mathf.Max(0f, box.bottom - box.top);
         Vector2 rawCenter = rawMediaPipeRect.center;
         Vector2 displayCenter = displaySpaceTopLeftRect.center;
         Vector2 finalUiCenter = new Vector2(displayCenter.x, 1f - displayCenter.y);
@@ -568,7 +570,11 @@ public class BackCameraFacePositionProvider : MonoBehaviour, IFacePositionProvid
         Debug.Log(
             $"{LogTag} FacePositionDebug " +
             $"rawMediaPipeBox=left:{box.left},top:{box.top},right:{box.right},bottom:{box.bottom} " +
+            $"boundingBoxPixels={boundingBoxPixelWidth:0.0}x{boundingBoxPixelHeight:0.0} " +
             $"rawMediaPipeCenter={rawCenter} " +
+            $"rawMediaPipeRectSize={rawMediaPipeRect.width:0.0000}x{rawMediaPipeRect.height:0.0000} " +
+            $"displaySpaceTopLeftRectSize={displaySpaceTopLeftRect.width:0.0000}x{displaySpaceTopLeftRect.height:0.0000} " +
+            $"normalizedFaceRectSize={normalizedFaceRect.width:0.0000}x{normalizedFaceRect.height:0.0000} " +
             $"inputImageSize={imageWidth}x{imageHeight} " +
             $"cameraTextureSize={cameraTextureSize} " +
             $"screenSize={UnityScreen.width}x{UnityScreen.height} " +
