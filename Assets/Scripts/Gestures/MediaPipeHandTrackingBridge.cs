@@ -14,8 +14,11 @@ namespace VRoom.Gestures
 
         private const int WristIndex = 0;
         private const int ThumbTipIndex = 4;
+        private const int IndexMcpIndex = 5;
         private const int IndexTipIndex = 8;
         private const int MiddleMcpIndex = 9;
+        private const int RingMcpIndex = 13;
+        private const int PinkyMcpIndex = 17;
 
         [Header("Output")]
         [SerializeField]
@@ -121,19 +124,25 @@ namespace VRoom.Gestures
                 return false;
 
             var landmarks = result.handLandmarks[handIndex].landmarks;
-            if (landmarks == null || landmarks.Count <= MiddleMcpIndex)
+            if (landmarks == null || landmarks.Count <= PinkyMcpIndex)
                 return false;
 
             var thumb = landmarks[ThumbTipIndex];
             var index = landmarks[IndexTipIndex];
             var wrist = landmarks[WristIndex];
+            var indexMcp = landmarks[IndexMcpIndex];
             var middleMcp = landmarks[MiddleMcpIndex];
+            var ringMcp = landmarks[RingMcpIndex];
+            var pinkyMcp = landmarks[PinkyMcpIndex];
 
             thumbTip = ToVector2(thumb.x, thumb.y);
             indexTip = ToVector2(index.x, index.y);
-            handScale = Vector2.Distance(
+            handScale = CalculatePalmScale(
                 ToVector2(wrist.x, wrist.y),
-                ToVector2(middleMcp.x, middleMcp.y)
+                ToVector2(indexMcp.x, indexMcp.y),
+                ToVector2(middleMcp.x, middleMcp.y),
+                ToVector2(ringMcp.x, ringMcp.y),
+                ToVector2(pinkyMcp.x, pinkyMcp.y)
             );
 
             if (TryGetHandedness(result, handIndex, out var label, out _))
@@ -200,6 +209,25 @@ namespace VRoom.Gestures
         private Vector2 ToVector2(float x, float y)
         {
             return new Vector2(x, flipY ? 1f - y : y);
+        }
+
+        private static float CalculatePalmScale(
+            Vector2 wrist,
+            Vector2 indexMcp,
+            Vector2 middleMcp,
+            Vector2 ringMcp,
+            Vector2 pinkyMcp)
+        {
+            float palmLength = (
+                Vector2.Distance(wrist, indexMcp) +
+                Vector2.Distance(wrist, middleMcp) +
+                Vector2.Distance(wrist, ringMcp) +
+                Vector2.Distance(wrist, pinkyMcp)
+            ) * 0.25f;
+
+            float palmWidth = Vector2.Distance(indexMcp, pinkyMcp);
+
+            return (palmLength + palmWidth) * 0.5f;
         }
     }
 }

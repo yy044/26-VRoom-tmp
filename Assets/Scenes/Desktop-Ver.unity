@@ -172,7 +172,7 @@ MonoBehaviour:
   zoomFollowSpeed: 18
   minPreviewScale: 0.5
   maxPreviewScale: 3
-  maxPreviewScaleStep: 0.015
+  maxPreviewScaleStep: 0.05
 --- !u!1 &514736082
 GameObject:
   m_ObjectHideFlags: 0
@@ -206,7 +206,11 @@ MonoBehaviour:
   noiseThreshold: 0.05
   ratioSensitivity: 1
   activationRatioThreshold: 0.12
-  distanceSmoothing: 0.4
+  pinchStartThreshold: 0.45
+  pinchReadyFrameCount: 2
+  repinchThreshold: 0.45
+  repinchReadyFrameCount: 2
+  distanceSmoothing: 0.35
   minValidDistance: 0.15
   maxValidDistance: 2.5
   minValidHandScale: 0.03

@@ -1011,6 +1011,10 @@ MonoBehaviour:
   noiseThreshold: 0.05
   ratioSensitivity: 1
   activationRatioThreshold: 0.12
+  pinchStartThreshold: 0.45
+  pinchReadyFrameCount: 2
+  repinchThreshold: 0.45
+  repinchReadyFrameCount: 2
   distanceSmoothing: 0.35
   minValidDistance: 0.15
   maxValidDistance: 2.5
@@ -1458,7 +1462,7 @@ MonoBehaviour:
   maxFieldOfViewStep: 1.5
   minArBackgroundZoom: 1
   maxArBackgroundZoom: 3
-  maxArBackgroundZoomStep: 0.1
+  maxArBackgroundZoomStep: 0.05
 --- !u!1 &1528904934
 GameObject:
   m_ObjectHideFlags: 0
