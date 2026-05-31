@@ -12,6 +12,8 @@ public class SpeechToTextManager : MonoBehaviour
         Disabled
     }
 
+    [Header("Binding")]
+    public bool autoBind = true;
     public TextMeshProUGUI headLabelText;
     public SttStreamReceiver sttStreamReceiver;
 
@@ -193,6 +195,9 @@ public class SpeechToTextManager : MonoBehaviour
 
     private void AutoBind()
     {
+        if (!autoBind)
+            return;
+
         if (headLabelText != null)
             return;
 

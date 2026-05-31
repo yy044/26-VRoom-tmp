@@ -20,8 +20,6 @@ public class MobileSceneAutoBinder : MonoBehaviour
         Button cameraButton = FindFirstObjectByType<Button>(FindObjectsInactive.Include);
         TMP_Text cameraButtonText = FindTextByName("CameraButton", "Camera Change", "Cam");
         TMP_Text statusText = FindTextByName("DebugText", "Status", "Debug");
-        RectTransform headLabel = FindRectTransformByName("HeadLabel");
-        TextMeshProUGUI headLabelText = headLabel != null ? headLabel.GetComponentInChildren<TextMeshProUGUI>(true) : null;
 
         MobileCamFeed mobileCamFeed = FindFirstObjectByType<MobileCamFeed>(FindObjectsInactive.Include);
         if (mobileCamFeed != null)
@@ -57,17 +55,7 @@ public class MobileSceneAutoBinder : MonoBehaviour
 
             if (headTracker.displayRect == null && preview != null)
                 headTracker.displayRect = preview.rectTransform;
-
-            if (headTracker.headLabel == null)
-                headTracker.headLabel = headLabel;
-
-            if (headTracker.headLabelText == null)
-                headTracker.headLabelText = headLabelText;
         }
-
-        SpeechToTextManager speechManager = FindFirstObjectByType<SpeechToTextManager>(FindObjectsInactive.Include);
-        if (speechManager != null && speechManager.headLabelText == null)
-            speechManager.headLabelText = headLabelText;
 
         ARCameraConfigSwitcher configSwitcher = FindFirstObjectByType<ARCameraConfigSwitcher>(FindObjectsInactive.Include);
         if (configSwitcher != null)
@@ -140,16 +128,4 @@ public class MobileSceneAutoBinder : MonoBehaviour
         return texts.Length > 0 ? texts[0] : null;
     }
 
-    private static RectTransform FindRectTransformByName(string targetName)
-    {
-        RectTransform[] rects = FindObjectsByType<RectTransform>(FindObjectsInactive.Include, FindObjectsSortMode.None);
-
-        foreach (RectTransform rect in rects)
-        {
-            if (rect.name == targetName)
-                return rect;
-        }
-
-        return null;
-    }
 }
