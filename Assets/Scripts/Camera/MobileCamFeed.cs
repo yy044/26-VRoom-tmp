@@ -33,6 +33,7 @@ public class MobileCamFeed : MonoBehaviour
     private WebCamTexture webcamTexture;
     private RectTransform displayRect;
     private RectTransform parentRect;
+    private ActiveFacePositionProviderRouter mappingRouter;
     private int currentCameraIndex;
     private bool isStarting;
     private string lastPreviewAuditState;
@@ -276,6 +277,9 @@ public class MobileCamFeed : MonoBehaviour
                 }
             }
         }
+
+        if (mappingRouter == null)
+            mappingRouter = FindFirstObjectByType<ActiveFacePositionProviderRouter>(FindObjectsInactive.Include);
     }
 
     private static string ShortName(string name)
@@ -305,7 +309,8 @@ public class MobileCamFeed : MonoBehaviour
         if (displayRect == null)
             return;
 
-        int rotation = webcamTexture.videoRotationAngle;
+        CameraModeMappingProfile back2DProfile = GetBack2DProfile();
+        int rotation = NormalizeRotationDegrees(webcamTexture.videoRotationAngle + back2DProfile.previewRotationDegrees);
         bool rotated = rotation == 90 || rotation == 270;
         displayRect.localEulerAngles = new Vector3(0f, 0f, -rotation);
 
@@ -342,17 +347,44 @@ public class MobileCamFeed : MonoBehaviour
         displayRect.sizeDelta = new Vector2(width, height);
         displayRect.anchoredPosition = Vector2.zero;
 
-        float xScale = mirrorX ? -1f : 1f;
+        float xScale = back2DProfile.previewMirrorX ? -1f : 1f;
         float yScale = webcamTexture.videoVerticallyMirrored ? -1f : 1f;
         displayRect.localScale = new Vector3(xScale, yScale, 1f);
-        LogPreviewTransform(rotation, xScale, yScale, width, height);
+        LogPreviewTransform(rotation, back2DProfile, xScale, yScale, width, height);
     }
 
-    private void LogPreviewTransform(int rotation, float xScale, float yScale, float width, float height)
+    private CameraModeMappingProfile GetBack2DProfile()
+    {
+        if (mappingRouter != null)
+            return mappingRouter.Back2DProfile;
+
+        CameraModeMappingProfile profile = CameraModeMappingProfile.CreateBack2DDefault();
+        profile.previewMirrorX = mirrorX;
+        return profile;
+    }
+
+    private static int NormalizeRotationDegrees(int rotationDegrees)
+    {
+        rotationDegrees %= 360;
+        if (rotationDegrees < 0)
+            rotationDegrees += 360;
+
+        return rotationDegrees;
+    }
+
+    private void LogPreviewTransform(
+        int rotation,
+        CameraModeMappingProfile back2DProfile,
+        float xScale,
+        float yScale,
+        float width,
+        float height)
     {
         string state =
             $"camera={CurrentCameraName} " +
-            $"mirrorX={mirrorX} " +
+            $"profilePreviewMirrorX={back2DProfile.previewMirrorX} " +
+            $"legacyMirrorX={mirrorX} " +
+            $"profilePreviewRotationDegrees={back2DProfile.previewRotationDegrees} " +
             $"videoRotationAngle={webcamTexture.videoRotationAngle} " +
             $"videoVerticallyMirrored={webcamTexture.videoVerticallyMirrored} " +
             $"rawSize={webcamTexture.width}x{webcamTexture.height} " +

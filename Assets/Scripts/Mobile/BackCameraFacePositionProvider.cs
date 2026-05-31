@@ -462,8 +462,8 @@ public class BackCameraFacePositionProvider : MonoBehaviour, IFacePositionProvid
         UnityRect displaySpaceTopLeftRect = RotateTextureRectToDisplaySpace(rawMediaPipeRect, videoRotationAngle);
         // Back-camera output is raw MediaPipe texture coordinates rotated once into
         // the displayed preview orientation. It remains top-left-origin and unmirrored;
-        // ActiveFacePositionProviderRouter.Back2DDefault performs the only Y inversion
-        // from MediaPipe/display top-left space into Unity screen bottom-left space.
+        // ActiveFacePositionProviderRouter.Back2DProfile.faceCoordinateTransform performs
+        // the display-space to Unity screen/UI-space conversion used by consumers.
         normalizedFaceRect = displaySpaceTopLeftRect;
         normalizedFaceCenter = normalizedFaceRect.center;
         normalizedFaceArea = normalizedFaceRect.width * normalizedFaceRect.height;

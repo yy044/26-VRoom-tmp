@@ -1325,6 +1325,15 @@ MonoBehaviour:
     swapXY: 0
     rotate90Clockwise: 0
     rotate90CounterClockwise: 0
+  back2DProfile:
+    previewMirrorX: 0
+    previewRotationDegrees: 0
+    faceCoordinateTransform:
+      mirrorX: 1
+      invertY: 1
+      swapXY: 0
+      rotate90Clockwise: 0
+      rotate90CounterClockwise: 0
   back2DTransform:
     mirrorX: 0
     invertY: 1

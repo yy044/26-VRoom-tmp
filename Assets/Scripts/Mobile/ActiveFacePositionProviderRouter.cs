@@ -17,7 +17,10 @@ public class ActiveFacePositionProviderRouter : MonoBehaviour, IFacePositionProv
     [Tooltip("Front AR uses ARCamera screen projection coordinates. Tune this separately from Back 2D because origin, handedness, and mirroring can differ by camera/source.")]
     [SerializeField] private FaceCoordinateTransformSettings frontARTransform = FaceCoordinateTransformSettings.CurrentMobileDefault;
 
-    [Tooltip("Back 2D provider rotates raw MediaPipe texture coordinates into preview orientation. This transform only converts top-left preview space into Unity bottom-left UI space.")]
+    [Tooltip("Back 2D mapping profile. Serialized scene values control runtime. Defaults only initialize/reset this profile; changing defaults will not mutate existing scenes unless reset or migrated.")]
+    [SerializeField] private CameraModeMappingProfile back2DProfile = CameraModeMappingProfile.CreateBack2DDefault();
+
+    [Tooltip("Legacy Back 2D transform retained for old serialized scenes. Runtime uses Back 2D Profile / Face Coordinate Transform.")]
     [SerializeField] private FaceCoordinateTransformSettings back2DTransform = FaceCoordinateTransformSettings.Back2DDefault;
 
     [Header("Fallback")]
@@ -30,13 +33,15 @@ public class ActiveFacePositionProviderRouter : MonoBehaviour, IFacePositionProv
     private bool hasLastMode;
     private string lastCoordinateMappingState;
     private string lastActivePathState;
+    private bool loggedBack2DProfile;
 
     public bool HasFace => ActiveProvider != null && IsActiveProviderEnabled() && ActiveProvider.HasFace;
     public Vector2 NormalizedFaceCenter => HasFace ? ActiveProvider.NormalizedFaceCenter : Vector2.zero;
     public Rect NormalizedFaceRect => HasFace ? ActiveProvider.NormalizedFaceRect : Rect.zero;
     public string SourceName => ActiveProvider != null && IsActiveProviderEnabled() ? ActiveProvider.SourceName : "No Active Face Provider";
     public MobileARModeController.MobileTrackingMode CurrentMode => modeController != null ? modeController.CurrentMode : MobileARModeController.MobileTrackingMode.FaceSubtitle;
-    public FaceCoordinateTransformSettings CurrentTransformSettings => IsBackProviderActive() ? back2DTransform : frontARTransform;
+    public FaceCoordinateTransformSettings CurrentTransformSettings => IsBackProviderActive() ? back2DProfile.faceCoordinateTransform : frontARTransform;
+    public CameraModeMappingProfile Back2DProfile => back2DProfile;
     public string CurrentProviderName
     {
         get
@@ -76,6 +81,7 @@ public class ActiveFacePositionProviderRouter : MonoBehaviour, IFacePositionProv
             AutoBind();
 
         ResolveProviders();
+        LogBack2DProfile();
         TrackModeChange();
     }
 
@@ -213,7 +219,7 @@ public class ActiveFacePositionProviderRouter : MonoBehaviour, IFacePositionProv
             $"providerEnabled={(activeBehaviour != null && activeBehaviour.isActiveAndEnabled)} " +
             $"transform={CurrentTransformSettings} " +
             $"frontTransform={frontARTransform} " +
-            $"backTransform={back2DTransform} " +
+            $"backProfile={Back2DProfile.faceCoordinateTransform} " +
             $"hasFace={(provider != null && provider.HasFace)}";
 
         if (state == lastActivePathState)
@@ -221,5 +227,20 @@ public class ActiveFacePositionProviderRouter : MonoBehaviour, IFacePositionProv
 
         lastActivePathState = state;
         Debug.Log($"[ActiveFaceProviderAudit] {state}", this);
+    }
+
+    private void LogBack2DProfile()
+    {
+        if (loggedBack2DProfile)
+            return;
+
+        loggedBack2DProfile = true;
+        CameraModeMappingProfile profile = Back2DProfile;
+        Debug.Log(
+            $"[CameraModeMappingProfile] Back2D " +
+            $"previewMirrorX={profile.previewMirrorX} " +
+            $"previewRotationDegrees={profile.previewRotationDegrees} " +
+            $"faceCoordinateTransform={profile.faceCoordinateTransform}",
+            this);
     }
 }
