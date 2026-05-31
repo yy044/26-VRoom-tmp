@@ -34,10 +34,11 @@ namespace VRoom.Gestures
         [SerializeField]
         private ARCameraBackground targetArCameraBackground;
 
-        [Header("Preview Zoom Settings")]
+        [Header("Zoom Response")]
         [SerializeField]
-        private float previewZoomSpeed = 3f;
+        private float zoomFollowSpeed = 18f;
 
+        [Header("Preview Zoom Settings")]
         [SerializeField]
         private float minPreviewScale = 0.5f;
 
@@ -65,15 +66,17 @@ namespace VRoom.Gestures
         private float maxArBackgroundZoom = 3f;
 
         [SerializeField]
-        private float arBackgroundZoomSpeed = 3f;
-
-        [SerializeField]
         private float maxArBackgroundZoomStep = 0.1f;
 
         private float currentPreviewScale = 1f;
         private float currentCameraZoom = 1f;
         private float currentFieldOfView;
         private float currentArBackgroundZoom = 1f;
+        private float previewScaleAtGestureStart = 1f;
+        private float cameraZoomAtGestureStart = 1f;
+        private float fieldOfViewAtGestureStart;
+        private float arBackgroundZoomAtGestureStart = 1f;
+        private int activeGestureSessionId = -1;
         private Matrix4x4 latestArDisplayMatrix = Matrix4x4.identity;
         private bool hasArDisplayMatrix;
         private Rect baseCameraUvRect;
@@ -162,19 +165,16 @@ namespace VRoom.Gestures
             if (!pinchZoomGesture.IsTracking)
                 return;
 
-            float zoomDelta = pinchZoomGesture.ZoomDelta;
-
-            if (Mathf.Approximately(zoomDelta, 0f))
-                return;
+            CaptureGestureStartIfNeeded();
 
             if (targetMode == ZoomTargetMode.CameraFeedCrop)
-                ApplyCameraFeedZoom(zoomDelta);
+                ApplyCameraFeedZoom();
             else if (targetMode == ZoomTargetMode.CameraFieldOfView)
-                ApplyCameraFieldOfViewZoom(zoomDelta);
+                ApplyCameraFieldOfViewZoom();
             else if (targetMode == ZoomTargetMode.ARCameraBackgroundCrop)
-                ApplyArBackgroundZoom(zoomDelta);
+                ApplyArBackgroundZoom();
             else
-                ApplyPreviewZoom(zoomDelta);
+                ApplyPreviewZoom();
         }
 
         private void LateUpdate()
@@ -183,85 +183,94 @@ namespace VRoom.Gestures
                 ApplyArBackgroundDisplayTransform();
         }
 
-        private void ApplyPreviewZoom(float zoomDelta)
+        private void ApplyPreviewZoom()
         {
-            float scaleDelta = Mathf.Clamp(
-                zoomDelta * previewZoomSpeed,
-                -maxPreviewScaleStep,
-                maxPreviewScaleStep
-            );
-
-            currentPreviewScale = Mathf.Clamp(
-                currentPreviewScale + scaleDelta,
+            float targetScale = Mathf.Clamp(
+                previewScaleAtGestureStart * pinchZoomGesture.ZoomScaleRatio,
                 minPreviewScale,
                 maxPreviewScale
             );
+            currentPreviewScale = MoveToward(currentPreviewScale, targetScale, maxPreviewScaleStep);
 
             targetPreview.localScale = Vector3.one * currentPreviewScale;
         }
 
-        private void ApplyCameraFeedZoom(float zoomDelta)
+        private void ApplyCameraFeedZoom()
         {
             if (!hasBaseCameraUvRect)
                 CaptureBaseCameraUvRect();
 
-            float zoomDeltaStep = Mathf.Clamp(
-                zoomDelta * previewZoomSpeed,
-                -maxPreviewScaleStep,
-                maxPreviewScaleStep
-            );
-
-            currentCameraZoom = Mathf.Clamp(
-                currentCameraZoom + zoomDeltaStep,
+            float targetCameraZoom = Mathf.Clamp(
+                cameraZoomAtGestureStart * pinchZoomGesture.ZoomScaleRatio,
                 1f,
                 maxPreviewScale
             );
+            currentCameraZoom = MoveToward(currentCameraZoom, targetCameraZoom, maxPreviewScaleStep);
 
-            float centerX = baseCameraUvRect.x + baseCameraUvRect.width * 0.5f;
-            float centerY = baseCameraUvRect.y + baseCameraUvRect.height * 0.5f;
+            Vector2 zoomCenter = Clamp01(pinchZoomGesture.PinchCenter);
+            float centerX = baseCameraUvRect.x + baseCameraUvRect.width * zoomCenter.x;
+            float centerY = baseCameraUvRect.y + baseCameraUvRect.height * zoomCenter.y;
             float croppedWidth = baseCameraUvRect.width / currentCameraZoom;
             float croppedHeight = baseCameraUvRect.height / currentCameraZoom;
+            float minX = baseCameraUvRect.x;
+            float maxX = baseCameraUvRect.x + baseCameraUvRect.width - croppedWidth;
+            float minY = baseCameraUvRect.y;
+            float maxY = baseCameraUvRect.y + baseCameraUvRect.height - croppedHeight;
 
             targetCameraFeed.uvRect = new Rect(
-                centerX - croppedWidth * 0.5f,
-                centerY - croppedHeight * 0.5f,
+                Mathf.Clamp(centerX - croppedWidth * 0.5f, minX, maxX),
+                Mathf.Clamp(centerY - croppedHeight * 0.5f, minY, maxY),
                 croppedWidth,
                 croppedHeight
             );
         }
 
-        private void ApplyCameraFieldOfViewZoom(float zoomDelta)
+        private void ApplyCameraFieldOfViewZoom()
         {
-            float fovDelta = Mathf.Clamp(
-                zoomDelta * previewZoomSpeed,
-                -maxFieldOfViewStep,
-                maxFieldOfViewStep
-            );
-
-            currentFieldOfView = Mathf.Clamp(
-                currentFieldOfView - fovDelta,
+            float targetFieldOfView = Mathf.Clamp(
+                fieldOfViewAtGestureStart / Mathf.Max(0.01f, pinchZoomGesture.ZoomScaleRatio),
                 minFieldOfView,
                 maxFieldOfView
             );
+            currentFieldOfView = MoveToward(currentFieldOfView, targetFieldOfView, maxFieldOfViewStep);
 
             targetCamera.fieldOfView = currentFieldOfView;
         }
 
-        private void ApplyArBackgroundZoom(float zoomDelta)
+        private void ApplyArBackgroundZoom()
         {
-            float zoomStep = Mathf.Clamp(
-                zoomDelta * arBackgroundZoomSpeed,
-                -maxArBackgroundZoomStep,
-                maxArBackgroundZoomStep
-            );
-
-            currentArBackgroundZoom = Mathf.Clamp(
-                currentArBackgroundZoom + zoomStep,
+            float targetArBackgroundZoom = Mathf.Clamp(
+                arBackgroundZoomAtGestureStart * pinchZoomGesture.ZoomScaleRatio,
                 minArBackgroundZoom,
                 maxArBackgroundZoom
             );
+            currentArBackgroundZoom = MoveToward(currentArBackgroundZoom, targetArBackgroundZoom, maxArBackgroundZoomStep);
 
             ApplyArBackgroundDisplayTransform();
+        }
+
+        private void CaptureGestureStartIfNeeded()
+        {
+            if (activeGestureSessionId == pinchZoomGesture.GestureSessionId)
+                return;
+
+            activeGestureSessionId = pinchZoomGesture.GestureSessionId;
+            previewScaleAtGestureStart = currentPreviewScale;
+            cameraZoomAtGestureStart = currentCameraZoom;
+            fieldOfViewAtGestureStart = currentFieldOfView;
+            arBackgroundZoomAtGestureStart = currentArBackgroundZoom;
+        }
+
+        private float MoveToward(float current, float target, float maxStep)
+        {
+            float smoothingStep = Mathf.Abs(target - current) * GetZoomFollowAmount();
+            float step = Mathf.Min(Mathf.Max(0f, maxStep), smoothingStep);
+            return Mathf.MoveTowards(current, target, step);
+        }
+
+        private float GetZoomFollowAmount()
+        {
+            return 1f - Mathf.Exp(-Mathf.Max(0f, zoomFollowSpeed) * Time.deltaTime);
         }
 
         private void ApplyArBackgroundDisplayTransform()
@@ -271,7 +280,7 @@ namespace VRoom.Gestures
 
             targetArCameraBackground.material.SetMatrix(
                 UnityDisplayTransformId,
-                latestArDisplayMatrix * BuildArBackgroundCropMatrix(currentArBackgroundZoom)
+                latestArDisplayMatrix * BuildArBackgroundCropMatrix(currentArBackgroundZoom, pinchZoomGesture.PinchCenter)
             );
         }
 
@@ -284,17 +293,28 @@ namespace VRoom.Gestures
             hasArDisplayMatrix = true;
         }
 
-        private static Matrix4x4 BuildArBackgroundCropMatrix(float zoom)
+        private static Matrix4x4 BuildArBackgroundCropMatrix(float zoom, Vector2 center)
         {
             float scale = 1f / Mathf.Max(1f, zoom);
-            float offset = (1f - scale) * 0.5f;
+            Vector2 clampedCenter = Clamp01(center);
+            float maxOffset = 1f - scale;
+            float offsetX = Mathf.Clamp(clampedCenter.x - scale * 0.5f, 0f, maxOffset);
+            float offsetY = Mathf.Clamp(clampedCenter.y - scale * 0.5f, 0f, maxOffset);
 
             Matrix4x4 matrix = Matrix4x4.identity;
             matrix.m00 = scale;
             matrix.m11 = scale;
-            matrix.m20 = offset;
-            matrix.m21 = offset;
+            matrix.m20 = offsetX;
+            matrix.m21 = offsetY;
             return matrix;
+        }
+
+        private static Vector2 Clamp01(Vector2 value)
+        {
+            return new Vector2(
+                Mathf.Clamp01(value.x),
+                Mathf.Clamp01(value.y)
+            );
         }
 
         private void CaptureBaseCameraUvRect()

@@ -20,6 +20,8 @@ public class ARCameraHandLandmarkerRunner : MonoBehaviour
     [SerializeField] private MediaPipeHandTrackingBridge handTrackingBridge;
     [Header("Performance")]
     [SerializeField, Range(1f, 15f)] private float targetFps = 8f;
+    [SerializeField, Range(1f, 15f)] private float idleFps = 4f;
+    [SerializeField, Min(0f)] private float activeHoldSeconds = 1.5f;
     [SerializeField, Range(160, 640)] private int maxInputWidth = 320;
 
     [Header("Detection")]
@@ -42,6 +44,7 @@ public class ARCameraHandLandmarkerRunner : MonoBehaviour
     private bool isReady;
     private float nextFrameTime;
     private float nextMissingCpuImageWarningTime;
+    private float lastHandDetectedTime = float.NegativeInfinity;
     private readonly System.Diagnostics.Stopwatch stopwatch = new();
 
     private IEnumerator Start()
@@ -95,7 +98,7 @@ public class ARCameraHandLandmarkerRunner : MonoBehaviour
         stopwatch.Restart();
         isReady = true;
 
-        Debug.Log($"{LogTag} ready. targetFps={targetFps}, maxInputWidth={maxInputWidth}, delegate={delegateMode}.", this);
+        Debug.Log($"{LogTag} ready. targetFps={targetFps}, idleFps={idleFps}, maxInputWidth={maxInputWidth}, delegate={delegateMode}.", this);
     }
 
     private void Update()
@@ -103,7 +106,7 @@ public class ARCameraHandLandmarkerRunner : MonoBehaviour
         if (!isReady || Time.unscaledTime < nextFrameTime)
             return;
 
-        nextFrameTime = Time.unscaledTime + 1f / Mathf.Max(1f, targetFps);
+        nextFrameTime = Time.unscaledTime + 1f / GetCurrentTargetFps();
 
         if (!cameraManager.TryAcquireLatestCpuImage(out var cpuImage))
         {
@@ -126,12 +129,26 @@ public class ARCameraHandLandmarkerRunner : MonoBehaviour
 
         if (handLandmarker.TryDetectForVideo(image, timestamp, GetImageProcessingOptions(), ref result))
         {
+            if (HasDetectedHand(result))
+                lastHandDetectedTime = Time.unscaledTime;
+
             handTrackingBridge.SubmitResult(result);
         }
         else
         {
             handTrackingBridge.SubmitResult(default);
         }
+    }
+
+    private float GetCurrentTargetFps()
+    {
+        bool recentlyDetectedHand = Time.unscaledTime - lastHandDetectedTime <= activeHoldSeconds;
+        return Mathf.Max(1f, recentlyDetectedHand ? targetFps : idleFps);
+    }
+
+    private static bool HasDetectedHand(HandLandmarkerResult result)
+    {
+        return result.handLandmarks != null && result.handLandmarks.Count > 0;
     }
 
     private bool TryUpdateInputTexture(XRCpuImage cpuImage)

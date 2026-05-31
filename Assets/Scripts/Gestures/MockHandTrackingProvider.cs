@@ -19,6 +19,9 @@ namespace VRoom.Gestures
         [SerializeField]
         private Vector2 pinchCenter = new Vector2(0.5f, 0.5f);
 
+        [SerializeField]
+        private float handScale = 0.2f;
+
         public bool TryGetHandFrame(out HandFrame frame)
         {
             UpdateMockDistance();
@@ -35,6 +38,8 @@ namespace VRoom.Gestures
                 true,
                 pinchCenter - halfOffset,
                 pinchCenter + halfOffset,
+                pinchCenter,
+                handScale,
                 Time.time
             );
 

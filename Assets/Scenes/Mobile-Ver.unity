@@ -1008,10 +1008,16 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::VRoom.Gestures.PinchZoomGesture
   handTrackingProviderBehaviour: {fileID: 1293470887}
-  noiseThreshold: 0.015
-  zoomSensitivity: 16
-  smoothing: 0.9
-  outputDeadZone: 0.01
+  noiseThreshold: 0.05
+  ratioSensitivity: 1
+  activationRatioThreshold: 0.12
+  distanceSmoothing: 0.35
+  minValidDistance: 0.15
+  maxValidDistance: 2.5
+  minValidHandScale: 0.03
+  maxDistanceJump: 0.5
+  warmupFrameCount: 2
+  trackingLossGraceFrames: 2
 --- !u!1 &785907824
 GameObject:
   m_ObjectHideFlags: 0
@@ -1223,6 +1229,8 @@ MonoBehaviour:
   cameraManager: {fileID: 154705326}
   handTrackingBridge: {fileID: 1879057971}
   targetFps: 8
+  idleFps: 4
+  activeHoldSeconds: 1.5
   maxInputWidth: 320
   delegateMode: 0
   numHands: 1
@@ -1441,7 +1449,7 @@ MonoBehaviour:
   targetCameraFeed: {fileID: 0}
   targetCamera: {fileID: 154705328}
   targetArCameraBackground: {fileID: 154705325}
-  previewZoomSpeed: 3
+  zoomFollowSpeed: 18
   minPreviewScale: 0.5
   maxPreviewScale: 3
   maxPreviewScaleStep: 0.1
@@ -1450,7 +1458,6 @@ MonoBehaviour:
   maxFieldOfViewStep: 1.5
   minArBackgroundZoom: 1
   maxArBackgroundZoom: 3
-  arBackgroundZoomSpeed: 3
   maxArBackgroundZoomStep: 0.1
 --- !u!1 &1528904934
 GameObject:
@@ -1958,6 +1965,8 @@ MonoBehaviour:
   handTrackingProvider: {fileID: 1293470887}
   flipY: 1
   landmarkSmoothing: 0.35
+  preferredHand: 0
+  minHandednessScore: 0.6
 --- !u!4 &1879057972
 Transform:
   m_ObjectHideFlags: 0
