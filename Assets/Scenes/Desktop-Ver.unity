@@ -167,10 +167,12 @@ MonoBehaviour:
   targetMode: 1
   targetPreview: {fileID: 0}
   targetCameraFeed: {fileID: 1056347259}
-  previewZoomSpeed: 1.2
+  targetCamera: {fileID: 0}
+  targetArCameraBackground: {fileID: 0}
+  zoomFollowSpeed: 18
   minPreviewScale: 0.5
   maxPreviewScale: 3
-  maxPreviewScaleStep: 0.015
+  maxPreviewScaleStep: 0.05
 --- !u!1 &514736082
 GameObject:
   m_ObjectHideFlags: 0
@@ -201,10 +203,20 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::VRoom.Gestures.PinchZoomGesture
   handTrackingProviderBehaviour: {fileID: 1056284705}
-  noiseThreshold: 0.008
-  zoomSensitivity: 8
-  smoothing: 0.12
-  outputDeadZone: 0.004
+  noiseThreshold: 0.05
+  ratioSensitivity: 1
+  activationRatioThreshold: 0.12
+  pinchStartThreshold: 0.45
+  pinchReadyFrameCount: 2
+  repinchThreshold: 0.45
+  repinchReadyFrameCount: 2
+  distanceSmoothing: 0.35
+  minValidDistance: 0.15
+  maxValidDistance: 2.5
+  minValidHandScale: 0.03
+  maxDistanceJump: 0.5
+  warmupFrameCount: 2
+  trackingLossGraceFrames: 2
 --- !u!4 &514736084
 Transform:
   m_ObjectHideFlags: 0
@@ -267,6 +279,8 @@ MonoBehaviour:
   handTrackingProvider: {fileID: 1056284705}
   flipY: 1
   landmarkSmoothing: 0.35
+  preferredHand: 0
+  minHandednessScore: 0.6
 --- !u!1 &614402865
 GameObject:
   m_ObjectHideFlags: 0
