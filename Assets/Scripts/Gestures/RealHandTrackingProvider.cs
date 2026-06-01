@@ -14,23 +14,28 @@ namespace VRoom.Gestures
         [SerializeField]
         private Vector2 indexTip;
 
+        [SerializeField]
+        private float handScale = 1f;
+
         public bool TryGetHandFrame(out HandFrame frame)
         {
             frame = new HandFrame(
                 isTracked,
                 thumbTip,
                 indexTip,
-                Time.time
+                Time.time,
+                handScale
             );
 
             return isTracked;
         }
 
-        public void SetHandFrame(bool tracked, Vector2 thumbTipPosition, Vector2 indexTipPosition)
+        public void SetHandFrame(bool tracked, Vector2 thumbTipPosition, Vector2 indexTipPosition, float handScale)
         {
             isTracked = tracked;
             thumbTip = thumbTipPosition;
             indexTip = indexTipPosition;
+            this.handScale = Mathf.Max(0.0001f, handScale);
         }
 
         public void ClearHandFrame()
@@ -38,6 +43,7 @@ namespace VRoom.Gestures
             isTracked = false;
             thumbTip = Vector2.zero;
             indexTip = Vector2.zero;
+            handScale = 1f;
         }
     }
 }

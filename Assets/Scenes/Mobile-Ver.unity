@@ -787,7 +787,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 614402865}
-  m_Enabled: 0
+  m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: e19747de3f5aca642ab2be37e372fb86, type: 3}
   m_Name: 
@@ -1037,10 +1037,20 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::VRoom.Gestures.PinchZoomGesture
   handTrackingProviderBehaviour: {fileID: 1293470887}
-  noiseThreshold: 0.015
-  zoomSensitivity: 16
-  smoothing: 0.9
-  outputDeadZone: 0.01
+  noiseThreshold: 0.05
+  ratioSensitivity: 1
+  activationRatioThreshold: 0.12
+  pinchStartThreshold: 0.45
+  pinchReadyFrameCount: 2
+  repinchThreshold: 0.45
+  repinchReadyFrameCount: 2
+  distanceSmoothing: 0.35
+  minValidDistance: 0.15
+  maxValidDistance: 2.5
+  minValidHandScale: 0.03
+  maxDistanceJump: 0.5
+  warmupFrameCount: 2
+  trackingLossGraceFrames: 2
 --- !u!1 &785907824
 GameObject:
   m_ObjectHideFlags: 0
@@ -1084,6 +1094,8 @@ GameObject:
   - component: {fileID: 937679130}
   - component: {fileID: 937679134}
   - component: {fileID: 937679135}
+  - component: {fileID: 937679131}
+  - component: {fileID: 937679133}
   - component: {fileID: 937679136}
   - component: {fileID: 937679138}
   - component: {fileID: 937679139}
@@ -1116,6 +1128,46 @@ Transform:
   - {fileID: 544499117}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &937679131
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 937679129}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c8c2c8f017da4e568b0d4cbd35a09f1d, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::MobileARHeadTracker
+  runner: {fileID: 937679135}
+  displayRect: {fileID: 0}
+  headLabel: {fileID: 614402866}
+  headLabelText: {fileID: 614402868}
+  labelText: Hello!
+  yOffset: 40
+  mirrorX: 0
+  smoothing: 15
+  setFallbackTextWhenEmpty: 0
+--- !u!114 &937679133
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 937679129}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3895e14e0208ea54693963b4347ec8fe, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::SpeechToTextManager
+  headLabelText: {fileID: 614402868}
+  sttStreamReceiver: {fileID: 463198396}
+  providerType: 1
+  whisperServerUrl: ws://127.0.0.1:8000/ws/stt
+  visibleSeconds: 3
+  fadeSeconds: 1
+  maxCharacters: 90
 --- !u!114 &937679134
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1202,6 +1254,8 @@ MonoBehaviour:
   cameraManager: {fileID: 154705326}
   handTrackingBridge: {fileID: 1879057971}
   targetFps: 8
+  idleFps: 4
+  activeHoldSeconds: 1.5
   maxInputWidth: 320
   delegateMode: 0
   numHands: 1
@@ -1239,8 +1293,8 @@ MonoBehaviour:
   orientationController: {fileID: 937679143}
   uiCanvas: {fileID: 1783144895}
   safeAreaPanel: {fileID: 3100000002}
-  headTracker: {fileID: 0}
-  speechToTextManager: {fileID: 0}
+  headTracker: {fileID: 937679131}
+  speechToTextManager: {fileID: 937679133}
   statusText: {fileID: 2111943446}
   showDebugStatus: 1
   statusRefreshSeconds: 0.5
@@ -1572,7 +1626,6 @@ GameObject:
   - component: {fileID: 1348300144}
   - component: {fileID: 1348300143}
   - component: {fileID: 1348300142}
-  - component: {fileID: 1348300146}
   m_Layer: 5
   m_Name: HeadSubtitlePanel
   m_TagString: Untagged
@@ -1599,7 +1652,7 @@ RectTransform:
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 800, y: 120}
+  m_SizeDelta: {x: 600, y: 120}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1348300142
 MonoBehaviour:
@@ -1617,10 +1670,14 @@ MonoBehaviour:
   wordTextTemplate: {fileID: 1808596504}
   subtitleCanvasGroup: {fileID: 1348300143}
   subtitleBackground: {fileID: 1348300144}
-  maxVisibleLines: 10
-  clearTextAfterFadeOut: 1
+  maxVisibleLines: 2
+  lineHeight: 56
+  wordSpacing: 8
+  wordFadeDuration: 0.18
+  lineMoveDuration: 0.35
+  lineFadeDuration: 0.4
   boxFadeDuration: 0.35
-  hideDelay: 3
+  hideDelay: 3.5
   backgroundAlpha: 0
 --- !u!225 &1348300143
 CanvasGroup:
@@ -1672,20 +1729,6 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1348300140}
   m_CullTransparentMesh: 1
---- !u!114 &1348300146
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1348300140}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3312d7739989d2b4e91e6319e9a96d76, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.RectMask2D
-  m_Padding: {x: 0, y: 0, z: 0, w: 0}
-  m_Softness: {x: 0, y: 0}
 --- !u!1 &1462840161
 GameObject:
   m_ObjectHideFlags: 0
@@ -1736,7 +1779,7 @@ MonoBehaviour:
   targetCameraFeed: {fileID: 0}
   targetCamera: {fileID: 154705328}
   targetArCameraBackground: {fileID: 154705325}
-  previewZoomSpeed: 3
+  zoomFollowSpeed: 18
   minPreviewScale: 0.5
   maxPreviewScale: 3
   maxPreviewScaleStep: 0.1
@@ -1745,8 +1788,7 @@ MonoBehaviour:
   maxFieldOfViewStep: 1.5
   minArBackgroundZoom: 1
   maxArBackgroundZoom: 3
-  arBackgroundZoomSpeed: 3
-  maxArBackgroundZoomStep: 0.1
+  maxArBackgroundZoomStep: 0.05
 --- !u!1 &1528904934
 GameObject:
   m_ObjectHideFlags: 0
@@ -1857,7 +1899,7 @@ MonoBehaviour:
   m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: caeceacb624484daf8e379c2252fd246, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Unity.XR.ARFoundation::UnityEngine.XR.ARFoundation.ARFaceManager
   <trackablesChanged>k__BackingField:
     m_PersistentCalls:
@@ -2159,8 +2201,8 @@ MonoBehaviour:
       m_Calls: []
   m_text: SUBTITLE POSITION
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: 7ed34cd2d84df2e48a34fbb5d63fd6c9, type: 2}
-  m_sharedMaterial: {fileID: 3589371107990252850, guid: 7ed34cd2d84df2e48a34fbb5d63fd6c9, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: 7ec78cd0c9184a945a513c277121c3e4, type: 2}
+  m_sharedMaterial: {fileID: 254148879617635945, guid: 7ec78cd0c9184a945a513c277121c3e4, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
@@ -2184,15 +2226,15 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 50
-  m_fontSizeBase: 50
+  m_fontSize: 34
+  m_fontSizeBase: 34
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
   m_fontSizeMax: 72
   m_fontStyle: 0
   m_HorizontalAlignment: 2
-  m_VerticalAlignment: 1024
+  m_VerticalAlignment: 4096
   m_textAlignment: 65535
   m_characterSpacing: 0
   m_characterHorizontalScale: 1
@@ -2223,7 +2265,7 @@ MonoBehaviour:
   m_VertexBufferAutoSizeReduction: 0
   m_useMaxVisibleDescender: 1
   m_pageToDisplay: 1
-  m_margin: {x: 0, y: 0, z: 0, w: 1}
+  m_margin: {x: 0, y: 0, z: 0, w: 0}
   m_isUsingLegacyAnimationComponent: 0
   m_isVolumetricText: 0
   m_hasFontAssetChanged: 0
@@ -2269,6 +2311,8 @@ MonoBehaviour:
   handTrackingProvider: {fileID: 1293470887}
   flipY: 1
   landmarkSmoothing: 0.35
+  preferredHand: 0
+  minHandednessScore: 0.6
 --- !u!4 &1879057972
 Transform:
   m_ObjectHideFlags: 0
