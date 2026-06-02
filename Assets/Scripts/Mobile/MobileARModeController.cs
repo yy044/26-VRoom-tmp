@@ -132,6 +132,7 @@ public class MobileARModeController : MonoBehaviour
         bool useFrontFaceMode = mode == MobileTrackingMode.FaceSubtitle || mode == MobileTrackingMode.FrontFaceAR;
         bool useBackFaceMode = mode == MobileTrackingMode.BackFace2D;
         bool useFaceMode = useFrontFaceMode || useBackFaceMode;
+        bool useHandGestureMode = mode == MobileTrackingMode.WorldHands || useFrontFaceMode || useBackFaceMode;
 
         if (orientationController != null)
             orientationController.ApplyForMode(useFrontFaceMode);
@@ -144,7 +145,7 @@ public class MobileARModeController : MonoBehaviour
         LogBackCameraRouteAudit(mode, 0, "requested-facing");
 
         SetEnabled(faceManager, useFrontFaceMode);
-        SetEnabled(handLandmarkerRunner, !useFaceMode);
+        SetEnabled(handLandmarkerRunner, useHandGestureMode);
         SetEnabled(planeManager, !useFaceMode);
         SetEnabled(raycastManager, !useFaceMode);
 
