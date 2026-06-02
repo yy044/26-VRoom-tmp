@@ -817,8 +817,8 @@ MonoBehaviour:
       m_Calls: []
   m_text: 
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: 7ec78cd0c9184a945a513c277121c3e4, type: 2}
-  m_sharedMaterial: {fileID: 254148879617635945, guid: 7ec78cd0c9184a945a513c277121c3e4, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: 7ed34cd2d84df2e48a34fbb5d63fd6c9, type: 2}
+  m_sharedMaterial: {fileID: 3589371107990252850, guid: 7ed34cd2d84df2e48a34fbb5d63fd6c9, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
@@ -1138,16 +1138,19 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: c8c2c8f017da4e568b0d4cbd35a09f1d, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MobileARHeadTracker
   runner: {fileID: 937679135}
   displayRect: {fileID: 0}
   headLabel: {fileID: 614402866}
   headLabelText: {fileID: 614402868}
   labelText: Hello!
+  useFaceTrackingPosition: 1
+  fixedAnchoredPosition: {x: 0, y: -260}
   yOffset: 40
   mirrorX: 0
   smoothing: 15
+  useFixedPositionWhenFaceMissing: 1
   setFallbackTextWhenEmpty: 0
 --- !u!114 &937679133
 MonoBehaviour:
@@ -1159,15 +1162,16 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 3895e14e0208ea54693963b4347ec8fe, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SpeechToTextManager
-  headLabelText: {fileID: 614402868}
+  autoBind: 1
+  headLabelText: {fileID: 1808596504}
   sttStreamReceiver: {fileID: 463198396}
   providerType: 1
-  whisperServerUrl: ws://127.0.0.1:8000/ws/stt
+  whisperServerUrl: wss://ey55616--vroom-realtime-stt-fastapi-app.modal.run/ws/stt
   visibleSeconds: 3
-  fadeSeconds: 1
-  maxCharacters: 90
+  fadeSeconds: 0.35
+  maxCharacters: 200
 --- !u!114 &937679134
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1254,8 +1258,6 @@ MonoBehaviour:
   cameraManager: {fileID: 154705326}
   handTrackingBridge: {fileID: 1879057971}
   targetFps: 8
-  idleFps: 4
-  activeHoldSeconds: 1.5
   maxInputWidth: 320
   delegateMode: 0
   numHands: 1
@@ -1308,8 +1310,8 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 9d2d7c7b50ab4e54c990b9761fa7d00b, type: 3}
-  m_Name:
-  m_EditorClassIdentifier:
+  m_Name: 
+  m_EditorClassIdentifier: 
   modeController: {fileID: 937679140}
   frontProviderBehaviour: {fileID: 937679135}
   backProviderBehaviour: {fileID: 154705329}
@@ -1340,23 +1342,6 @@ MonoBehaviour:
     rotate90CounterClockwise: 0
   personTrackManager: {fileID: 937679144}
   autoBindOnAwake: 1
---- !u!114 &937679144
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 937679129}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 37c946c9a5d44e74a83b9cb2d132bf4d, type: 3}
-  m_Name:
-  m_EditorClassIdentifier:
-  maximumPeopleToTrack: 2
-  personMatchDistance: 0.18
-  forgetPersonAfterSeconds: 1
-  newPersonPriority: 0
-  primaryPersonSelection: 0
 --- !u!114 &937679142
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1429,6 +1414,23 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MobileOrientationController
   frontCameraOrientation: 1
   backCameraOrientation: 3
+--- !u!114 &937679144
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 937679129}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 37c946c9a5d44e74a83b9cb2d132bf4d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  maximumPeopleToTrack: 2
+  personMatchDistance: 0.18
+  forgetPersonAfterSeconds: 1
+  newPersonPriority: 0
+  primaryPersonSelection: 0
 --- !u!1 &1140573822
 GameObject:
   m_ObjectHideFlags: 0
@@ -1598,6 +1600,7 @@ MonoBehaviour:
   isTracked: 0
   thumbTip: {x: 0, y: 0}
   indexTip: {x: 0, y: 0}
+  handScale: 1
 --- !u!4 &1293470888
 Transform:
   m_ObjectHideFlags: 0
@@ -1626,6 +1629,7 @@ GameObject:
   - component: {fileID: 1348300144}
   - component: {fileID: 1348300143}
   - component: {fileID: 1348300142}
+  - component: {fileID: 1348300146}
   m_Layer: 5
   m_Name: HeadSubtitlePanel
   m_TagString: Untagged
@@ -1652,7 +1656,7 @@ RectTransform:
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 600, y: 120}
+  m_SizeDelta: {x: 600, y: 85}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1348300142
 MonoBehaviour:
@@ -1670,14 +1674,10 @@ MonoBehaviour:
   wordTextTemplate: {fileID: 1808596504}
   subtitleCanvasGroup: {fileID: 1348300143}
   subtitleBackground: {fileID: 1348300144}
-  maxVisibleLines: 2
-  lineHeight: 56
-  wordSpacing: 8
-  wordFadeDuration: 0.18
-  lineMoveDuration: 0.35
-  lineFadeDuration: 0.4
+  maxVisibleLines: 10
+  clearTextAfterFadeOut: 1
   boxFadeDuration: 0.35
-  hideDelay: 3.5
+  hideDelay: 3
   backgroundAlpha: 0
 --- !u!225 &1348300143
 CanvasGroup:
@@ -1729,6 +1729,20 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1348300140}
   m_CullTransparentMesh: 1
+--- !u!114 &1348300146
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1348300140}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3312d7739989d2b4e91e6319e9a96d76, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.RectMask2D
+  m_Padding: {x: 0, y: 0, z: 0, w: 0}
+  m_Softness: {x: 0, y: 0}
 --- !u!1 &1462840161
 GameObject:
   m_ObjectHideFlags: 0
@@ -1899,7 +1913,7 @@ MonoBehaviour:
   m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: caeceacb624484daf8e379c2252fd246, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Unity.XR.ARFoundation::UnityEngine.XR.ARFoundation.ARFaceManager
   <trackablesChanged>k__BackingField:
     m_PersistentCalls:
@@ -2176,8 +2190,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 1, y: 1}
-  m_AnchoredPosition: {x: 0, y: 16.000004}
-  m_SizeDelta: {x: -48, y: -32}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0.5, y: 0}
 --- !u!114 &1808596504
 MonoBehaviour:
@@ -2199,10 +2213,10 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: SUBTITLE POSITION
+  m_text: 
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: 7ec78cd0c9184a945a513c277121c3e4, type: 2}
-  m_sharedMaterial: {fileID: 254148879617635945, guid: 7ec78cd0c9184a945a513c277121c3e4, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: 7ed34cd2d84df2e48a34fbb5d63fd6c9, type: 2}
+  m_sharedMaterial: {fileID: 3589371107990252850, guid: 7ed34cd2d84df2e48a34fbb5d63fd6c9, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
@@ -2226,15 +2240,15 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 34
-  m_fontSizeBase: 34
+  m_fontSize: 40
+  m_fontSizeBase: 40
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
   m_fontSizeMax: 72
   m_fontStyle: 0
   m_HorizontalAlignment: 2
-  m_VerticalAlignment: 4096
+  m_VerticalAlignment: 1024
   m_textAlignment: 65535
   m_characterSpacing: 0
   m_characterHorizontalScale: 1
